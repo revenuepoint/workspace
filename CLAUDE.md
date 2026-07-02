@@ -31,3 +31,10 @@ TanStack Query v5 + zustand + MSW v2. Node 22.
   `fetch` by hand; override behavior with `server.use(...)` per test.
 - Motion: `ease-editorial` token; 180ms hover / 320ms panel / 600ms page; 2px hover-lift.
 - Verify before finishing: `npm run typecheck && npm run lint && npm test && npm run build`.
+
+## Deploy gotcha (learned 2026-07-02)
+
+GitHub Pages dedupes deployments by commit SHA (`pages_build_version`). If a
+deploy attempt for a SHA times out or is cancelled, re-running the workflow
+for the SAME SHA gets insta-cancelled by the Pages backend. Recovery is a new
+commit (fresh SHA), not a rerun.
