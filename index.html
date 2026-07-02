@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Strict CSP (charter-locked). The dev server strips this tag (see
+      vite.config.ts) because @vitejs/plugin-react needs an inline preamble
+      script in dev; production builds ship it verbatim.
+      style-src 'unsafe-inline' is required: Radix + sonner inject runtime
+      <style> tags and Tailwind preflight is inlined during preview of CSS
+      transitions.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self' https://api.revenuepoint.com https://*.datadoghq.com; script-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="RevenuePoint Workspace — track your cases, send updates, and see where things stand." />
+    <meta name="robots" content="noindex" />
+    <title>RevenuePoint Workspace</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,140 @@
+/* Self-hosted fonts (CSP: font-src 'self' — no CDN fonts, ever) */
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/fraunces';
+@import '@fontsource-variable/jetbrains-mono';
+
+@import 'tailwindcss';
+
+/*
+ * RevenuePoint Workspace — product surface of the Direction A editorial
+ * system. Tokens mirror revenuepoint.com/tailwind.config.ts exactly.
+ * Crimson + navy are locked. No green anywhere — on-track/positive uses navy.
+ */
+@theme {
+  /* Ink + paper */
+  --color-ink: #1a1612;
+  --color-inkSoft: #2d261e;
+  --color-inkMid: #4a4239;
+  --color-snow: #fcfaf6;
+  --color-paper: #f4efe6;
+  --color-cream: #faf6ec;
+  --color-bone: #e8e2d5;
+  --color-rule: #c4bca8;
+  --color-ruleSoft: #dcd4c0;
+  --color-mute: #7a6f5c;
+  --color-muteSoft: #a09683;
+
+  /* Brand + signal */
+  --color-crimson: #8b0a39;
+  --color-crimsonDeep: #6b0829;
+  --color-crimsonTint: #f2e0e5;
+  --color-navy: #0f1a2b;
+  --color-navySoft: #2a3f58;
+  --color-navyTint: #dde3ea;
+  --color-amber: #a86a1f;
+  --color-rust: #a4391e;
+  --color-gold: #c39a4a;
+
+  /* Type — product surface: Geist for everything, Fraunces only via .font-serif
+     (wordmark + /login hero), JetBrains Mono for case numbers/stamps/chips. */
+  --font-sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Fraunces Variable', 'Iowan Old Style', 'Apple Garamond', Georgia, serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Motion */
+  --ease-editorial: cubic-bezier(0.32, 0.04, 0.16, 1);
+  --ease-editorial-out: cubic-bezier(0.2, 0.7, 0.1, 1);
+
+  /* Tracking */
+  --tracking-crisp: -0.012em;
+  --tracking-eyebrow: 0.16em;
+  --tracking-wordmark: -0.02em;
+
+  /* Shadows */
+  --shadow-editorial: 0 1px 3px rgba(26, 22, 18, 0.06), 0 4px 12px rgba(26, 22, 18, 0.04);
+  --shadow-lift: 0 2px 4px rgba(26, 22, 18, 0.07), 0 8px 20px rgba(26, 22, 18, 0.06);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-snow);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    letter-spacing: var(--tracking-crisp);
+    font-feature-settings: 'kern' 1, 'ss01' 1, 'cv11' 1;
+  }
+
+  /* Mono contexts get tabular numerals + slashed zero (case numbers, stamps) */
+  .font-mono,
+  code,
+  pre {
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+  }
+
+  /* Focus: 2px crimson ring, 2px offset — everywhere, keyboard-visible */
+  :focus-visible {
+    outline: 2px solid var(--color-crimson);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-crimsonTint);
+    color: var(--color-crimsonDeep);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* JetBrains Mono micro-label — form labels, eyebrows, meta captions */
+  .micro-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: var(--tracking-eyebrow);
+    text-transform: uppercase;
+    color: var(--color-mute);
+  }
+
+  /* Sanitized email bodies inside timeline entries */
+  .email-body {
+    font-size: 0.875rem;
+    line-height: 1.65;
+    color: var(--color-inkSoft);
+  }
+  .email-body p,
+  .email-body ul,
+  .email-body ol {
+    margin-block: 0.6em;
+  }
+  .email-body ul,
+  .email-body ol {
+    padding-inline-start: 1.2em;
+    list-style: disc;
+  }
+  .email-body a {
+    color: var(--color-crimson);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .email-body blockquote {
+    border-left: 2px solid var(--color-rule);
+    padding-left: 0.75em;
+    color: var(--color-mute);
+    margin-block: 0.6em;
+  }
+}
