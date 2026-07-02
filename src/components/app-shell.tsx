@@ -48,6 +48,14 @@ export function AppShell() {
         </div>
       </header>
 
+      {contact?.impersonated ? (
+        <div role="status" className="border-b border-amber/30 bg-amber/10">
+          <p className="mx-auto w-full max-w-5xl px-6 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-amber">
+            Viewing as {contact.firstName} {contact.lastName} ({contact.accountName}) — read-only
+          </p>
+        </div>
+      ) : null}
+
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
         <Outlet />
       </main>

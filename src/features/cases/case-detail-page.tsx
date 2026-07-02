@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { api, ApiError, saveCaseFile } from '@/lib/api'
 import type { CaseDetail, FileMeta } from '@/lib/api-types'
 import { formatBytes, formatDate, relativeTime } from '@/lib/format'
+import { useSessionStore } from '@/stores/session'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { StatusChip } from '@/components/ui/status-chip'
@@ -157,10 +158,20 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
         </div>
       </section>
 
-      <section className="mt-8 border-t border-rule/50 pt-6">
-        <CommentComposer caseId={detail.id} />
-      </section>
+      <ComposerSection caseId={detail.id} />
     </article>
+  )
+}
+
+function ComposerSection({ caseId }: { caseId: string }) {
+  // Impersonation sessions are read-only server-side; don't render an
+  // affordance that can only fail.
+  const impersonated = useSessionStore((s) => s.contact?.impersonated === true)
+  if (impersonated) return null
+  return (
+    <section className="mt-8 border-t border-rule/50 pt-6">
+      <CommentComposer caseId={caseId} />
+    </section>
   )
 }
 

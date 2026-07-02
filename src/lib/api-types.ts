@@ -14,6 +14,8 @@ export interface Contact {
   email: string
   accountId: string
   accountName: string
+  /** Present (true) on staff impersonation sessions — the API rejects writes. */
+  impersonated?: boolean
 }
 
 /** POST /v1/client/auth/start — always 200 (no account enumeration). */
