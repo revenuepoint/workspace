@@ -55,9 +55,15 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # Pages deployments for this site routinely take ~10 minutes to process
+    # backend-side — the action's 10-minute default timeout made deploys a
+    # coin flip (and retries of a cancelled SHA get insta-cancelled).
+    timeout-minutes: 45
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 1800000
