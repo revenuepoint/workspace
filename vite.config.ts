@@ -37,5 +37,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // CSP is font-src 'self' — never inline small font files as data: URIs
+    // (the browser rejects them and text falls back to system fonts).
+    assetsInlineLimit: 0,
   },
 })
