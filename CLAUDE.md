@@ -34,7 +34,9 @@ TanStack Query v5 + zustand + MSW v2. Node 22.
 
 ## Deploy gotcha (learned 2026-07-02)
 
-GitHub Pages dedupes deployments by commit SHA (`pages_build_version`). If a
-deploy attempt for a SHA times out or is cancelled, re-running the workflow
-for the SAME SHA gets insta-cancelled by the Pages backend. Recovery is a new
-commit (fresh SHA), not a rerun.
+When Pages deploys hang in `deployment_queued` or get insta-cancelled, check
+https://www.githubstatus.com FIRST — a Pages incident produces exactly those
+symptoms and no workflow-side fix helps. The deploy job keeps a generous
+timeout (30 min) because this site's deployments have been observed taking
+~10 minutes even on good days, which straddled the action's 10-minute
+default.
