@@ -11,6 +11,11 @@ export function seedSession(): void {
   useSessionStore.getState().login(MOCK_SESSION_JWT, seedContact)
 }
 
+/** Sign in as staff viewing the fixture contact's workspace (read-only impersonation). */
+export function seedImpersonatedSession(): void {
+  useSessionStore.getState().login(MOCK_SESSION_JWT, { ...seedContact, impersonated: true })
+}
+
 export function createTestQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {

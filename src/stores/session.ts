@@ -14,10 +14,15 @@ interface PersistedSession {
 interface SessionState {
   jwt: string | null
   contact: Contact | null
+  /** True when the session was cleared BY expiry (401) — AuthGate reads this
+   *  to land on /login?expired=1 instead of a bare /login. Never persisted. */
+  expired: boolean
   login: (jwt: string, contact: Contact) => void
   /** Rotate the JWT in place (X-Session-Refresh) without touching the contact. */
   setJwt: (jwt: string) => void
   logout: () => void
+  /** Session-expired variant of logout (the 401 flow in api.ts). */
+  expireSession: () => void
 }
 
 function readPersistedSession(): PersistedSession | null {
@@ -46,10 +51,11 @@ function persistSession(session: PersistedSession | null): void {
 
 export const useSessionStore = create<SessionState>()((set, get) => ({
   ...(readPersistedSession() ?? { jwt: null, contact: null }),
+  expired: false,
 
   login: (jwt, contact) => {
     persistSession({ jwt, contact })
-    set({ jwt, contact })
+    set({ jwt, contact, expired: false })
   },
 
   setJwt: (jwt) => {
@@ -60,6 +66,11 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
 
   logout: () => {
     persistSession(null)
-    set({ jwt: null, contact: null })
+    set({ jwt: null, contact: null, expired: false })
+  },
+
+  expireSession: () => {
+    persistSession(null)
+    set({ jwt: null, contact: null, expired: true })
   },
 }))

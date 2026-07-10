@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -22,6 +23,10 @@ type LoginForm = z.infer<typeof loginSchema>
  * link" re-triggers quietly and shows the same confirmation either way.
  */
 export function LoginPage() {
+  const [params] = useSearchParams()
+  // Set by the 401 session-expired flow (api.ts). The toast there can be
+  // missed on a cold landing, so the page itself explains the sign-out.
+  const expired = params.get('expired') === '1'
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [resending, setResending] = useState(false)
 
@@ -73,6 +78,15 @@ export function LoginPage() {
                 We&rsquo;ll email you a link to sign in. No password needed.
               </p>
 
+              {expired ? (
+                <p
+                  role="status"
+                  className="mt-6 rounded-md border border-rule/60 bg-paper px-4 py-3 text-sm leading-relaxed text-inkMid"
+                >
+                  You were signed out. Sign in again to pick up where you left off.
+                </p>
+              ) : null}
+
               <form onSubmit={handleSubmit(sendLink)} noValidate className="mt-8 space-y-5">
                 <Field>
                   <MicroLabel htmlFor="login-email">Email</MicroLabel>
@@ -80,6 +94,10 @@ export function LoginPage() {
                     id="login-email"
                     type="email"
                     autoComplete="email"
+                    // The page exists solely to collect this one field — the
+                    // focus jump that makes autofocus harmful elsewhere is the
+                    // whole point here.
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
                     placeholder="you@company.com"
                     aria-invalid={errors.email ? true : undefined}

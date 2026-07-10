@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { server } from '@/mocks/node'
-import { api, ApiError, buildMultipart, registerUnauthorizedNavigator } from '@/lib/api'
+import { api, ApiError, buildMultipart } from '@/lib/api'
 import { SESSION_STORAGE_KEY, useSessionStore } from '@/stores/session'
 import { seedContact, MOCK_SESSION_JWT } from '@/mocks/fixtures'
 
@@ -56,10 +56,8 @@ describe('api client', () => {
     expect(persisted.contact.email).toBe(seedContact.email)
   })
 
-  it('on 401: clears the session, toasts, and redirects to /login?expired=1', async () => {
+  it('on 401: clears the session, marks it expired, and toasts', async () => {
     signIn()
-    const navigateSpy = vi.fn()
-    registerUnauthorizedNavigator(navigateSpy)
     server.use(
       http.get('*/v1/client/cases', () =>
         HttpResponse.json({ error: 'unauthorized' }, { status: 401 }),
@@ -70,15 +68,14 @@ describe('api client', () => {
 
     expect(useSessionStore.getState().jwt).toBeNull()
     expect(useSessionStore.getState().contact).toBeNull()
+    // AuthGate reads this flag and redirects to /login?expired=1.
+    expect(useSessionStore.getState().expired).toBe(true)
     expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull()
     expect(toast.error).toHaveBeenCalledWith('Your session expired. Sign in again to keep going.')
-    expect(navigateSpy).toHaveBeenCalledWith('/login?expired=1')
   })
 
   it('only runs the session-expired flow once when parallel requests 401', async () => {
     signIn()
-    const navigateSpy = vi.fn()
-    registerUnauthorizedNavigator(navigateSpy)
     server.use(
       http.get('*/v1/client/cases', () =>
         HttpResponse.json({ error: 'unauthorized' }, { status: 401 }),
@@ -87,19 +84,15 @@ describe('api client', () => {
 
     const results = await Promise.allSettled([api.listCases('open'), api.listCases('all')])
     expect(results.every((r) => r.status === 'rejected')).toBe(true)
-    expect(navigateSpy).toHaveBeenCalledTimes(1)
     expect(toast.error).toHaveBeenCalledTimes(1)
   })
 
   it('does NOT treat auth/complete 401s as an expired session', async () => {
-    const navigateSpy = vi.fn()
-    registerUnauthorizedNavigator(navigateSpy)
-
     await expect(api.authComplete('expired-token')).rejects.toMatchObject({
       status: 401,
       code: 'expired_link',
     })
-    expect(navigateSpy).not.toHaveBeenCalled()
+    expect(useSessionStore.getState().expired).toBe(false)
     expect(toast.error).not.toHaveBeenCalled()
   })
 
@@ -110,6 +103,24 @@ describe('api client', () => {
       code: 'not_found',
     })
     await expect(api.getCase('nope')).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it('lets caller cancellation through without triggering the session-expired flow', async () => {
+    signIn()
+    server.use(
+      http.get('*/v1/client/cases', async () => {
+        await delay(5_000)
+        return HttpResponse.json({ cases: [], counts: { open: 0, closed: 0 } })
+      }),
+    )
+
+    const controller = new AbortController()
+    const promise = api.listCases('open', { signal: controller.signal })
+    controller.abort()
+
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(useSessionStore.getState().jwt).toBe(MOCK_SESSION_JWT)
+    expect(useSessionStore.getState().expired).toBe(false)
   })
 
   it('builds multipart bodies the contract expects (fields + files, empties dropped)', () => {

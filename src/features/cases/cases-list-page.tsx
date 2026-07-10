@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus, TriangleAlert } from 'lucide-react'
 import { api } from '@/lib/api'
 import type { CaseListFilter, CaseSummary } from '@/lib/api-types'
 import { relativeTime } from '@/lib/format'
+import { useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
 import { Button } from '@/components/ui/button'
@@ -37,7 +38,7 @@ export function CasesListPage() {
 
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['cases', filter],
-    queryFn: () => api.listCases(filter),
+    queryFn: ({ signal }) => api.listCases(filter, { signal }),
     staleTime: 15_000,
   })
 
@@ -45,8 +46,20 @@ export function CasesListPage() {
     if (!data) return []
     const accessor = SORT_ACCESSORS[sort.key]
     const factor = sort.dir === 'asc' ? 1 : -1
-    return [...data.cases].sort((a, b) => accessor(a).localeCompare(accessor(b)) * factor)
+    return [...data.cases].sort((a, b) => {
+      // Your-move cases surface first, whatever the sort.
+      if (a.waitingOnYou !== b.waitingOnYou) return a.waitingOnYou ? -1 : 1
+      return accessor(a).localeCompare(accessor(b)) * factor
+    })
   }, [data, sort])
+
+  const waitingCount = useMemo(
+    () => (data?.cases ?? []).filter((c) => c.waitingOnYou).length,
+    [data],
+  )
+
+  // Below md the 5-column table can't breathe — swap to stacked cards.
+  const narrow = useMediaQuery('(max-width: 767px)')
 
   function setFilter(next: CaseListFilter) {
     setSearchParams(next === 'open' ? {} : { status: next }, { replace: true })
@@ -116,6 +129,21 @@ export function CasesListPage() {
         })}
       </div>
 
+      {waitingCount > 0 ? (
+        <div
+          role="status"
+          className="mt-6 flex items-center gap-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3"
+        >
+          <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-amber" />
+          <p className="text-sm leading-relaxed text-inkMid">
+            <span className="font-semibold text-ink">
+              {waitingCount === 1 ? '1 case is' : `${waitingCount} cases are`} waiting on you.
+            </span>{' '}
+            Reply when you&rsquo;re ready — they&rsquo;re pinned to the top.
+          </p>
+        </div>
+      ) : null}
+
       <div className="mt-6">
         {isPending ? (
           <div className="flex justify-center border-t border-rule/50 py-20">
@@ -130,6 +158,8 @@ export function CasesListPage() {
           </div>
         ) : sorted.length === 0 ? (
           <EmptyState filter={filter} counts={counts ?? { open: 0, closed: 0 }} />
+        ) : narrow ? (
+          <CasesCards cases={sorted} />
         ) : (
           <CasesTable cases={sorted} sort={sort} onSort={toggleSort} onOpen={(id) => navigate(`/cases/${id}`)} />
         )}
@@ -169,6 +199,37 @@ function EmptyState({ filter, counts }: { filter: CaseListFilter; counts: { open
         </p>
       )}
     </div>
+  )
+}
+
+/** Narrow-screen layout: one tappable card per case, newest first. */
+function CasesCards({ cases }: { cases: CaseSummary[] }) {
+  return (
+    <ul className="space-y-3 border-t border-rule/50 pt-4">
+      {cases.map((c) => (
+        <li key={c.id}>
+          <Link
+            to={`/cases/${c.id}`}
+            className={cn(
+              'block rounded-lg border border-rule/60 bg-card px-4 py-3.5 no-underline transition-all duration-[180ms] ease-editorial hover:-translate-y-[2px] hover:border-mute hover:shadow-lift',
+              c.waitingOnYou && 'border-l-2 border-l-amber',
+            )}
+          >
+            <span className="flex items-baseline justify-between gap-3">
+              <span className="font-mono text-[0.8125rem] text-inkMid">{c.caseNumber}</span>
+              <span className="font-mono text-[0.8125rem] text-mute">{relativeTime(c.lastActivityAt)}</span>
+            </span>
+            <span className="mt-1.5 block text-[0.9375rem] font-medium leading-snug text-ink">
+              {c.subject}
+            </span>
+            <span className="mt-2.5 flex flex-wrap items-center gap-2">
+              <StatusChip status={c.status} />
+              <span className="text-xs text-mute">{c.recordTypeLabel}</span>
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   )
 }
 

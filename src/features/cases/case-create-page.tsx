@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import type { CreateCaseResponse } from '@/lib/api-types'
 import { cn } from '@/lib/utils'
+import { useSessionStore } from '@/stores/session'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Field, FieldError, FieldHint, MicroLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -65,6 +66,7 @@ const URGENCY_OPTIONS = ['Critical', 'High', 'Medium', 'Low', 'Lowest']
 export function CaseCreatePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const impersonated = useSessionStore((s) => s.contact?.impersonated === true)
   const [files, setFiles] = useState<File[]>([])
   const [created, setCreated] = useState<CreateCaseResponse | null>(null)
 
@@ -101,6 +103,12 @@ export function CaseCreatePage() {
       toast.error('That didn’t go through. Your draft is still here — try again.')
     },
   })
+
+  // Impersonation sessions are read-only server-side; don't render a form
+  // that can only 403 (page-level twin of the detail page's ComposerSection).
+  if (impersonated) {
+    return <Navigate to="/cases" replace />
+  }
 
   if (created) {
     return <CreateSuccess result={created} />
@@ -147,7 +155,7 @@ export function CaseCreatePage() {
                     key={value}
                     value={value}
                     className={cn(
-                      'rounded-lg border bg-white px-4 py-4 text-left transition-all duration-[180ms] ease-editorial hover:-translate-y-[2px] hover:shadow-lift',
+                      'rounded-lg border bg-card px-4 py-4 text-left transition-all duration-[180ms] ease-editorial hover:-translate-y-[2px] hover:shadow-lift',
                       'data-[state=checked]:border-crimson data-[state=checked]:bg-crimsonTint/40',
                       'data-[state=unchecked]:border-rule/80',
                     )}

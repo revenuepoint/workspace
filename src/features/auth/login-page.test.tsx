@@ -37,6 +37,18 @@ describe('LoginPage', () => {
     expect(screen.queryByText(/Check your inbox/)).not.toBeInTheDocument()
   })
 
+  it('explains the sign-out when arriving from an expired session', () => {
+    renderWithProviders(<LoginPage />, { route: '/login?expired=1', path: '/login' })
+
+    expect(screen.getByText(/You were signed out/)).toBeInTheDocument()
+  })
+
+  it('shows no signed-out note on a normal visit', () => {
+    renderWithProviders(<LoginPage />, { route: '/login', path: '/login' })
+
+    expect(screen.queryByText(/You were signed out/)).not.toBeInTheDocument()
+  })
+
   it('re-triggering "Send another link" keeps showing the same confirmation', async () => {
     const user = userEvent.setup()
     renderWithProviders(<LoginPage />, { route: '/login', path: '/login' })

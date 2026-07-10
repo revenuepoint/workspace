@@ -46,7 +46,11 @@ function notFound() {
 
 function isAuthorized(request: Request): boolean {
   const header = request.headers.get('Authorization')
-  return header !== null && header.startsWith('Bearer ') && header.slice(7).length > 0
+  if (header === null || !header.startsWith('Bearer ')) return false
+  const token = header.slice(7)
+  // e2e hook: a session stored with this JWT always 401s — exercises the
+  // whole session-expired flow (clear, toast, /login?expired=1).
+  return token.length > 0 && token !== 'expired-session-jwt'
 }
 
 function toSummary(c: CaseDetail): CaseSummary {
@@ -115,6 +119,14 @@ export const handlers = [
           { error: 'link_already_used', message: 'This sign-in link was already used.' },
           { status: 401 },
         )
+      case 'impersonate-token': {
+        // Staff impersonation: same contact, read-only flag set (the real API rejects writes).
+        const body: AuthCompleteResponse = {
+          sessionJwt: MOCK_SESSION_JWT,
+          contact: { ...seedContact, impersonated: true },
+        }
+        return HttpResponse.json(body)
+      }
       default: {
         if (!token) {
           return HttpResponse.json(

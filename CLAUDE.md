@@ -32,11 +32,11 @@ TanStack Query v5 + zustand + MSW v2. Node 22.
 - Motion: `ease-editorial` token; 180ms hover / 320ms panel / 600ms page; 2px hover-lift.
 - Verify before finishing: `npm run typecheck && npm run lint && npm test && npm run build`.
 
-## Deploy gotcha (learned 2026-07-02)
+## Deploy (rewired 2026-07-10 — Heroku is permanent)
 
-When Pages deploys hang in `deployment_queued` or get insta-cancelled, check
-https://www.githubstatus.com FIRST — a Pages incident produces exactly those
-symptoms and no workflow-side fix helps. The deploy job keeps a generous
-timeout (30 min) because this site's deployments have been observed taking
-~10 minutes even on good days, which straddled the action's 10-minute
-default.
+Production = the Heroku api app (`revenuepoint-api`) serving `spa-dist/` from the
+`revenuepoint/api` repo; `workspace.revenuepoint.com` points there and API calls
+are same-origin (`VITE_API_BASE_URL=''`). Push to `main` here → `ci.yml` verifies
+(typecheck/lint/unit/e2e) → commits `dist/` into `revenuepoint/api:spa-dist/` →
+the api repo's CI deploys to Heroku. GitHub Pages hosting is retired; the old
+"check githubstatus.com first" gotcha only matters if Pages ever returns.

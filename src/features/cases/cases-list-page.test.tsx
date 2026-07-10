@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/mocks/node'
-import { renderWithProviders, seedSession } from '@/test/test-utils'
+import { renderWithProviders, seedImpersonatedSession, seedSession } from '@/test/test-utils'
 import { CasesListPage } from './cases-list-page'
 
 function renderList() {
@@ -30,6 +30,33 @@ describe('CasesListPage', () => {
     // Proper table semantics
     expect(screen.getByRole('columnheader', { name: /Case #/ })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: /Last activity/ })).toBeInTheDocument()
+  })
+
+  it('pins waiting-on-you cases to the top and announces the count', async () => {
+    renderList()
+
+    expect(await screen.findByText('1 case is waiting on you.')).toBeInTheDocument()
+
+    // The waiting case leads despite other cases having newer activity.
+    const rows = screen.getAllByRole('row')
+    expect(rows[1]).toHaveTextContent('Read-only access for our external auditors')
+  })
+
+  it('renders tappable cards instead of the table on narrow screens', async () => {
+    const mql = { matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue(mql as unknown as MediaQueryList),
+    )
+    try {
+      renderList()
+
+      const card = await screen.findByRole('link', { name: /Quarterly invoice shows duplicate line items/ })
+      expect(card).toHaveTextContent('00012341')
+      expect(screen.queryByRole('columnheader')).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('marks waiting-on-you rows with the amber left edge', async () => {
@@ -67,6 +94,14 @@ describe('CasesListPage', () => {
     expect(await screen.findByText(/No open cases\. Need to start one\?/)).toBeInTheDocument()
     // Both the header button and the empty-state link say "Create a case"
     expect(screen.getAllByRole('link', { name: /Create a case/ }).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('hides the create affordances for impersonated (read-only) sessions', async () => {
+    seedImpersonatedSession()
+    renderWithProviders(<CasesListPage />, { route: '/cases', path: '/cases' })
+
+    await screen.findByRole('heading', { name: 'Acme Corp · Cases' })
+    expect(screen.queryByRole('link', { name: /Create a case/ })).not.toBeInTheDocument()
   })
 
   it('shows the nothing-here-yet empty state when the account has no cases at all', async () => {

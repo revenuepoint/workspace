@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders, seedSession } from '@/test/test-utils'
+import { renderWithProviders, seedImpersonatedSession, seedSession } from '@/test/test-utils'
 import { CaseDetailPage } from './case-detail-page'
 
 function renderDetail(caseId: string) {
@@ -77,6 +77,48 @@ describe('CaseDetailPage', () => {
     expect(screen.getByText('403 KB')).toBeInTheDocument()
   })
 
+  it('shows who has the case when it is with a person, not a queue', async () => {
+    renderDetail('case-0001')
+    await screen.findByRole('heading', { name: /Quarterly invoice/ })
+
+    expect(screen.getByText('With Priya Raman')).toBeInTheDocument()
+  })
+
+  it('omits the owner for queue-owned cases', async () => {
+    renderDetail('case-0006')
+    await screen.findByRole('heading', { name: /Runbook for the month-end close/ })
+
+    expect(screen.queryByText(/With Client Success/)).not.toBeInTheDocument()
+  })
+
+  it('makes timeline file entries downloadable', async () => {
+    renderDetail('case-0001')
+    await screen.findByRole('heading', { name: /Quarterly invoice/ })
+
+    // Once in the Files panel, once as the timeline entry's chip.
+    expect(screen.getAllByRole('button', { name: /Download invoice-march-export\.csv/ })).toHaveLength(2)
+  })
+
+  it('lets the client mark an open case resolved via a structured note', async () => {
+    const user = userEvent.setup()
+    renderDetail('case-0002')
+    await screen.findByRole('heading', { name: /Payment webhook retries/ })
+
+    await user.click(screen.getByRole('button', { name: 'Mark as resolved' }))
+    await user.click(screen.getByRole('button', { name: 'Post the note' }))
+
+    expect(await screen.findByText(/please close this case/)).toBeInTheDocument()
+    // The row resets; the team closes the case in Salesforce.
+    expect(screen.getByRole('button', { name: 'Mark as resolved' })).toBeInTheDocument()
+  })
+
+  it('offers no resolve affordance on closed cases', async () => {
+    renderDetail('case-0007')
+    await screen.findByRole('heading', { name: /Reset MFA/ })
+
+    expect(screen.queryByRole('button', { name: 'Mark as resolved' })).not.toBeInTheDocument()
+  })
+
   it('shows the amber Waiting on you banner only when waitingOnYou', async () => {
     renderDetail('case-0004')
     await screen.findByRole('heading', { name: /Read-only access/ })
@@ -92,6 +134,14 @@ describe('CaseDetailPage', () => {
 
     expect(screen.queryByText(/RevenuePoint needs something from you/)).not.toBeInTheDocument()
     expect(screen.getByText(/No activity yet/)).toBeInTheDocument()
+  })
+
+  it('hides the composer for impersonated (read-only) sessions', async () => {
+    seedImpersonatedSession()
+    renderWithProviders(<CaseDetailPage />, { route: '/cases/case-0001', path: '/cases/:id' })
+
+    await screen.findByRole('heading', { name: /Quarterly invoice/ })
+    expect(screen.queryByLabelText('Add a comment')).not.toBeInTheDocument()
   })
 
   it('shows the not-found state for a case outside this account', async () => {

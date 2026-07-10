@@ -1,7 +1,7 @@
 # RevenuePoint Workspace
 
 Client-facing case management portal — see your cases, send updates, start new ones.
-A Vite + React 19 SPA developed entirely against MSW mocks of the frozen `/v1/client` API contract, deployed to GitHub Pages at `workspace.revenuepoint.com`.
+A Vite + React 19 SPA developed entirely against MSW mocks of the frozen `/v1/client` API contract, served in production by the Heroku api app at `workspace.revenuepoint.com`.
 
 ## Quickstart
 
@@ -24,7 +24,7 @@ Special mock tokens for the error states: `expired-token`, `invalid-token`, `use
 | Script              | What it does                                                        |
 | ------------------- | ------------------------------------------------------------------- |
 | `npm run dev`       | Dev server with MSW mocks (`.env.development` sets `VITE_USE_MOCKS=true`) |
-| `npm run build`     | Typecheck + production build + `404.html` SPA fallback for GH Pages |
+| `npm run build`     | Typecheck + production build (`dist/`)                              |
 | `npm run preview`   | Serve the production build locally                                  |
 | `npm run typecheck` | `tsc -b`                                                            |
 | `npm run lint`      | ESLint                                                              |
@@ -35,7 +35,7 @@ Special mock tokens for the error states: `expired-token`, `invalid-token`, `use
 
 | Variable                                 | Default                 | Notes                                                                  |
 | ---------------------------------------- | ----------------------- | ---------------------------------------------------------------------- |
-| `VITE_API_BASE_URL`                      | `http://localhost:3000` | API origin. Empty string = same-origin (required for mock/CSP mode).   |
+| `VITE_API_BASE_URL`                      | `''` (same-origin)      | API origin. Same-origin is correct in prod (the api app serves the SPA); point at `http://localhost:3000` to hit a local API. |
 | `VITE_USE_MOCKS`                         | unset (`true` in dev)   | `true` starts the MSW browser worker before render.                    |
 | `VITE_DD_APP_ID` / `VITE_DD_CLIENT_TOKEN`| unset                   | Datadog RUM initializes only when **both** are set. Empty in dev.      |
 | `VITE_DD_SITE` / `VITE_DD_SERVICE` / `VITE_DD_ENV` | sensible defaults | Optional RUM tuning.                                        |
@@ -53,18 +53,36 @@ Local overrides go in `.env.local` (gitignored). To point dev at a real API:
 
 ## Deploy
 
-Push to `main` → `.github/workflows/deploy.yml` runs typecheck/lint/test, builds with
-`VITE_API_BASE_URL=https://api.revenuepoint.com` and `VITE_USE_MOCKS=false`, and publishes
-`dist/` to GitHub Pages (`public/CNAME` pins the custom domain; `404.html` handles SPA deep links).
+Production is the Heroku api app (`revenuepoint-api`), which serves this SPA from its
+`spa-dist/` directory alongside `/v1/*` — `workspace.revenuepoint.com` points there, so
+API calls are same-origin. Push to `main` → `.github/workflows/ci.yml`:
 
-### CSP
+1. **verify** — typecheck, lint, unit tests, then the Playwright journey against a
+   production build (strict CSP included), then the real build with
+   `VITE_API_BASE_URL=''` (same-origin) and `VITE_USE_MOCKS=false`.
+2. **publish** — commits the fresh `dist/` into `revenuepoint/api:spa-dist/`
+   (needs the `API_REPO_TOKEN` secret); the api repo's CI deploys to Heroku.
+
+GitHub Pages hosting is retired (it hosted the launch until the 2026-07-02 Pages
+incident; `CNAME`/`.nojekyll`/`404.html` are gone with it).
+
+### CSP & security headers
 
 `index.html` ships a strict Content-Security-Policy meta tag (`script-src 'self'`,
 `font-src 'self'` — fonts are self-hosted via Fontsource, no CDNs). The dev server strips
 the tag (react-refresh needs an inline preamble); builds keep it and the e2e suite runs
-against it. Two watch-outs, deliberately left as-is per the charter:
+against it. The api app sends the same policy as a real header, plus what a meta tag
+can't carry: `frame-ancestors 'none'` and HSTS.
 
-- Datadog: if your org's RUM intake resolves to `browser-intake-datadoghq.com` (not
-  `*.datadoghq.com`), add it to `connect-src` before enabling RUM in production.
+- Datadog: `connect-src` includes `https://browser-intake-datadoghq.com`, the RUM SDK's
+  default US1 intake, alongside `*.datadoghq.com`.
 - GA4: enabling `VITE_GA_ID` requires adding `https://www.googletagmanager.com` to
   `script-src` and `https://*.google-analytics.com` to `connect-src`.
+
+### Accepted session-security tradeoffs
+
+The session JWT lives in `localStorage` (an XSS could read it) — accepted for the
+magic-link/bearer contract because the CSP allows no third-party script and every
+dependency is bundled; revisit if the CSP ever loosens. Datadog RUM identifies users by
+email (no opaque contact id exists in the auth contract) with session replay masking
+user input.

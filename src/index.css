@@ -23,6 +23,8 @@
   --color-ruleSoft: #dcd4c0;
   --color-mute: #7a6f5c;
   --color-muteSoft: #a09683;
+  /* Pure-white card/input surface — subtle elevation against snow */
+  --color-card: #ffffff;
 
   /* Brand + signal */
   --color-crimson: #8b0a39;

@@ -19,7 +19,10 @@ import type {
  * funnels 401s into the single session-expired flow.
  */
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000'
+// Default '' = same-origin: the Heroku api app serves both the SPA and /v1/*,
+// so an unset env in a prod build does the right thing. Dev overrides live in
+// .env.development / .env.local; vitest pins an absolute base (vitest.config).
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export class ApiError extends Error {
   readonly status: number
@@ -33,23 +36,10 @@ export class ApiError extends Error {
   }
 }
 
-type NavigateFn = (to: string) => void
-
-// App registers the react-router navigate so an expired session lands on
-// /login without a full reload; outside the app (or before registration)
-// we fall back to a hard navigation.
-let navigateFn: NavigateFn = (to) => {
-  window.location.assign(to)
-}
-
-export function registerUnauthorizedNavigator(fn: NavigateFn): void {
-  navigateFn = fn
-}
-
 function handleSessionExpired(): void {
-  const { jwt, logout } = useSessionStore.getState()
+  const { jwt, expireSession } = useSessionStore.getState()
   // Parallel queries can all 401 at once — only the first one gets to
-  // clear the session, toast, and redirect.
+  // clear the session and toast.
   if (!jwt) return
   const here = window.location.pathname + window.location.search
   if (here.startsWith('/cases')) {
@@ -59,9 +49,11 @@ function handleSessionExpired(): void {
       // non-fatal
     }
   }
-  logout()
+  // No navigation here — AuthGate owns the redirect. It sees the expired
+  // flag and lands on /login?expired=1; a second navigation source would
+  // race the gate's own <Navigate> and lose the explanation.
+  expireSession()
   toast.error('Your session expired. Sign in again to keep going.')
-  navigateFn('/login?expired=1')
 }
 
 interface RequestOptions {
@@ -72,10 +64,22 @@ interface RequestOptions {
   formData?: FormData
   /** false for the auth endpoints, where a 401 is a link problem, not an expired session. */
   auth?: boolean
+  /** Caller cancellation (TanStack Query hands queries its own signal). */
+  signal?: AbortSignal
+  /** false disables the 30s guard (downloads; multipart uploads are always exempt). */
+  timeout?: boolean
+}
+
+const REQUEST_TIMEOUT_MS = 30_000
+
+/** Prefer combining; on browsers without AbortSignal.any, caller cancellation wins. */
+function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
+  if (a && b) return typeof AbortSignal.any === 'function' ? AbortSignal.any([a, b]) : a
+  return a ?? b
 }
 
 async function rawRequest(path: string, options: RequestOptions = {}): Promise<Response> {
-  const { method = 'GET', json, formData, auth = true } = options
+  const { method = 'GET', json, formData, auth = true, signal: callerSignal, timeout = true } = options
 
   const headers = new Headers()
   if (json !== undefined) headers.set('Content-Type', 'application/json')
@@ -84,11 +88,29 @@ async function rawRequest(path: string, options: RequestOptions = {}): Promise<R
     if (jwt) headers.set('Authorization', `Bearer ${jwt}`)
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: json !== undefined ? JSON.stringify(json) : formData,
-  })
+  // A hung request must not spin forever — 30s guard on JSON traffic.
+  // Uploads (and downloads via timeout: false) can legitimately run longer.
+  const guard = timeout && formData === undefined ? AbortSignal.timeout(REQUEST_TIMEOUT_MS) : undefined
+
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: json !== undefined ? JSON.stringify(json) : formData,
+      signal: combineSignals(callerSignal, guard),
+    })
+  } catch (error) {
+    // Query cancellations pass through untouched (TanStack swallows its own
+    // aborts); real failures become typed ApiErrors for the UI error states.
+    if (error instanceof DOMException && error.name === 'AbortError') throw error
+    const timedOut = error instanceof DOMException && error.name === 'TimeoutError'
+    throw new ApiError(
+      0,
+      timedOut ? 'timeout' : 'network_error',
+      timedOut ? 'The request timed out.' : 'We couldn’t reach RevenuePoint — check your connection.',
+    )
+  }
 
   // Sliding sessions: the server may rotate the JWT on any response.
   const refreshedJwt = response.headers.get('X-Session-Refresh')
@@ -153,12 +175,12 @@ export const api = {
     return request('/v1/client/auth/complete', { method: 'POST', json: { token }, auth: false })
   },
 
-  listCases(status: CaseListFilter): Promise<CasesListResponse> {
-    return request(`/v1/client/cases?status=${status}`)
+  listCases(status: CaseListFilter, init?: { signal?: AbortSignal }): Promise<CasesListResponse> {
+    return request(`/v1/client/cases?status=${status}`, { signal: init?.signal })
   },
 
-  getCase(id: string): Promise<CaseDetail> {
-    return request(`/v1/client/cases/${encodeURIComponent(id)}`)
+  getCase(id: string, init?: { signal?: AbortSignal }): Promise<CaseDetail> {
+    return request(`/v1/client/cases/${encodeURIComponent(id)}`, { signal: init?.signal })
   },
 
   createCase(input: CreateCaseInput): Promise<CreateCaseResponse> {
@@ -191,8 +213,10 @@ export const api = {
   },
 
   async downloadCaseFile(caseId: string, contentDocumentId: string): Promise<Blob> {
+    // No timeout: a 10 MB file on a slow link can honestly take minutes.
     const response = await rawRequest(
       `/v1/client/cases/${encodeURIComponent(caseId)}/files/${encodeURIComponent(contentDocumentId)}/download`,
+      { timeout: false },
     )
     return response.blob()
   },

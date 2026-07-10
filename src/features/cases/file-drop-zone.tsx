@@ -91,7 +91,7 @@ export function FileDropZone({
           {files.map((file) => (
             <li
               key={file.name}
-              className="inline-flex items-center gap-2 rounded-md border border-rule/80 bg-white px-3 py-1.5 text-sm text-inkSoft"
+              className="inline-flex items-center gap-2 rounded-md border border-rule/80 bg-card px-3 py-1.5 text-sm text-inkSoft"
             >
               <FileText aria-hidden="true" className="size-4 shrink-0 text-mute" />
               <span className="max-w-48 truncate font-medium">{file.name}</span>

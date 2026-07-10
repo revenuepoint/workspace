@@ -60,7 +60,9 @@ export function LoginCallbackPage() {
   // effect so we never burn the token twice.
   const attempted = useRef(false)
 
-  const token = params.get('token')
+  // A present-but-empty token (?token=) counts as missing — otherwise nothing
+  // ever attempts completion and the spinner never resolves.
+  const token = params.get('token')?.trim() || null
 
   useEffect(() => {
     if (!token || attempted.current) return

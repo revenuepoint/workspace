@@ -1,0 +1,104 @@
+name: CI · publish SPA to the api app
+
+# Production is the Heroku api app (revenuepoint-api) serving spa-dist/ from
+# the revenuepoint/api repo — workspace.revenuepoint.com points there. A push
+# to main here verifies everything (typecheck/lint/unit/e2e), builds with a
+# same-origin API base, and commits the fresh dist/ into revenuepoint/api,
+# whose own CI deploys to Heroku. GitHub Pages hosting is retired.
+#
+# Secrets: API_REPO_TOKEN (PAT, contents:write on revenuepoint/api), plus the
+# optional VITE_DD_* trio for RUM.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Runs against a production build under the strict CSP (MSW worker
+      # intercepts same-origin API calls) — proves the dist actually works.
+      - name: e2e journey
+        run: npm run e2e
+
+      # Real build LAST — e2e:build overwrites dist with the mock-mode build.
+      - name: Build (same-origin API)
+        env:
+          VITE_API_BASE_URL: ''
+          VITE_USE_MOCKS: 'false'
+          VITE_DD_APP_ID: ${{ secrets.VITE_DD_APP_ID }}
+          VITE_DD_CLIENT_TOKEN: ${{ secrets.VITE_DD_CLIENT_TOKEN }}
+          VITE_DD_SITE: ${{ secrets.VITE_DD_SITE }}
+          VITE_DD_SERVICE: workspace
+          VITE_DD_ENV: production
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spa-dist
+          path: dist
+          retention-days: 7
+
+  publish:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out revenuepoint/api
+        uses: actions/checkout@v4
+        with:
+          repository: revenuepoint/api
+          token: ${{ secrets.API_REPO_TOKEN }}
+          path: api
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: spa-dist
+          path: fresh-dist
+
+      - name: Sync into spa-dist/
+        run: |
+          rm -rf api/spa-dist
+          mkdir -p api/spa-dist
+          cp -R fresh-dist/. api/spa-dist/
+
+      - name: Commit & push
+        working-directory: api
+        run: |
+          git config user.name "workspace-ci"
+          git config user.email "workspace-ci@revenuepoint.com"
+          git add spa-dist
+          if git diff --cached --quiet; then
+            echo "No SPA changes to publish."
+            exit 0
+          fi
+          git commit -m "Publish Workspace SPA ${GITHUB_SHA::12} (workspace CI)"
+          git push origin main

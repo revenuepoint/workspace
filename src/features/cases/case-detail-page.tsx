@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Download, Paperclip, TriangleAlert } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CircleCheck, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
-import { api, ApiError, saveCaseFile } from '@/lib/api'
-import type { CaseDetail, FileMeta } from '@/lib/api-types'
-import { formatBytes, formatDate, relativeTime } from '@/lib/format'
+import { api, ApiError } from '@/lib/api'
+import type { CaseDetail } from '@/lib/api-types'
+import { formatDate, relativeTime } from '@/lib/format'
 import { useSessionStore } from '@/stores/session'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { StatusChip } from '@/components/ui/status-chip'
 import { CommentComposer } from './comment-composer'
+import { FileChip } from './file-chip'
 import { Timeline } from './timeline'
 
 export function CaseDetailPage() {
@@ -18,8 +19,11 @@ export function CaseDetailPage() {
 
   const { data, isPending, error, refetch } = useQuery({
     queryKey: ['case', id],
-    queryFn: () => api.getCase(id),
+    queryFn: ({ signal }) => api.getCase(id, { signal }),
     staleTime: 15_000,
+    // Fresh replies matter most on an open case page — poll gently while
+    // the tab is visible (TanStack pauses the interval in background tabs).
+    refetchInterval: 60_000,
   })
 
   if (isPending) {
@@ -98,6 +102,12 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
             {relativeTime(detail.lastModifiedAt)}
           </time>
         </span>
+        {!detail.owner.isQueue ? (
+          <>
+            <MetaDot />
+            <span className="text-inkMid">With {detail.owner.name}</span>
+          </>
+        ) : null}
         {detail.submittedBy ? (
           <>
             <MetaDot />
@@ -154,24 +164,86 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
           Activity
         </h2>
         <div className="mt-5">
-          <Timeline entries={detail.timeline} />
+          <Timeline entries={detail.timeline} caseId={detail.id} />
         </div>
       </section>
 
-      <ComposerSection caseId={detail.id} />
+      <ComposerSection detail={detail} />
     </article>
   )
 }
 
-function ComposerSection({ caseId }: { caseId: string }) {
+function ComposerSection({ detail }: { detail: CaseDetail }) {
   // Impersonation sessions are read-only server-side; don't render an
   // affordance that can only fail.
   const impersonated = useSessionStore((s) => s.contact?.impersonated === true)
   if (impersonated) return null
   return (
     <section className="mt-8 border-t border-rule/50 pt-6">
-      <CommentComposer caseId={caseId} />
+      <CommentComposer caseId={detail.id} />
+      {detail.statusGroup === 'open' ? <ResolveRow caseId={detail.id} /> : null}
     </section>
+  )
+}
+
+/**
+ * "Mark as resolved" ships inside the frozen contract: it posts a fixed,
+ * parseable note through the normal comments endpoint. The team still closes
+ * the case in Salesforce; agents and Nexus see the marker up front.
+ */
+const RESOLVED_COMMENT = '[Client marks resolved] Resolved on our side — please close this case.'
+
+function ResolveRow({ caseId }: { caseId: string }) {
+  const [confirming, setConfirming] = useState(false)
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: () => api.addComment(caseId, RESOLVED_COMMENT),
+    onSuccess: (result) => {
+      queryClient.setQueryData<CaseDetail>(['case', caseId], (old) =>
+        old
+          ? { ...old, lastActivityAt: result.entry.at, timeline: [...old.timeline, result.entry] }
+          : old,
+      )
+      setConfirming(false)
+      toast('Noted — we’ll close it out.')
+    },
+    onError: () => toast.error('That didn’t send. Give it another try.'),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['case', caseId] })
+      void queryClient.invalidateQueries({ queryKey: ['cases'] })
+    },
+  })
+
+  return (
+    <div className="mt-5 flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-lg border border-rule/60 bg-paper/60 px-4 py-3">
+      {confirming ? (
+        <>
+          <p className="text-sm text-inkMid">Post a note asking us to close this case?</p>
+          <div className="flex gap-2">
+            <Button size="sm" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+              {mutation.isPending ? 'Posting…' : 'Post the note'}
+            </Button>
+            <Button
+              variant="quiet"
+              size="sm"
+              disabled={mutation.isPending}
+              onClick={() => setConfirming(false)}
+            >
+              Keep it open
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-inkMid">All set on your side?</p>
+          <Button variant="neutral" size="sm" onClick={() => setConfirming(true)}>
+            <CircleCheck aria-hidden="true" />
+            Mark as resolved
+          </Button>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -180,39 +252,5 @@ function MetaDot() {
     <span aria-hidden="true" className="text-muteSoft">
       ·
     </span>
-  )
-}
-
-function FileChip({ caseId, file }: { caseId: string; file: FileMeta }) {
-  const [downloading, setDownloading] = useState(false)
-
-  async function download() {
-    setDownloading(true)
-    try {
-      await saveCaseFile(caseId, file.contentDocumentId, file.title)
-    } catch {
-      toast.error(`${file.title} didn’t download. Give it another try.`)
-    } finally {
-      setDownloading(false)
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={download}
-      disabled={downloading}
-      title={`Download ${file.title}`}
-      className="group inline-flex items-center gap-2 rounded-md border border-rule/80 bg-white px-3 py-2 text-sm text-inkSoft transition-all duration-[180ms] ease-editorial hover:-translate-y-[2px] hover:border-mute hover:shadow-lift disabled:opacity-60"
-    >
-      <Paperclip aria-hidden="true" className="size-4 shrink-0 text-mute" />
-      <span className="max-w-56 truncate font-medium">{file.title}</span>
-      <span className="font-mono text-xs text-mute">{formatBytes(file.sizeBytes)}</span>
-      <Download
-        aria-hidden="true"
-        className="size-4 shrink-0 text-muteSoft transition-colors duration-[180ms] ease-editorial group-hover:text-crimson"
-      />
-      <span className="sr-only">Download {file.title}</span>
-    </button>
   )
 }

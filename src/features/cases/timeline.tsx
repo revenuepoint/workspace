@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react'
-import DOMPurify from 'dompurify'
-import { Mail, Paperclip } from 'lucide-react'
+import { Mail } from 'lucide-react'
 import type { TimelineEntry } from '@/lib/api-types'
-import { formatBytes, formatDateTime, relativeTime } from '@/lib/format'
+import { formatDateTime, relativeTime } from '@/lib/format'
+import { sanitizeEmailHtml } from '@/lib/sanitize'
 import { cn } from '@/lib/utils'
+import { FileChip } from './file-chip'
 
 /**
  * Case timeline — chronological, newest LAST (chat order). Client entries
  * sit right in navyTint bubbles, RevenuePoint entries left in paper bubbles,
  * system events are centered mono pills.
  */
-export function Timeline({ entries }: { entries: TimelineEntry[] }) {
+export function Timeline({ entries, caseId }: { entries: TimelineEntry[]; caseId: string }) {
   const ordered = useMemo(() => [...entries].sort((a, b) => a.at.localeCompare(b.at)), [entries])
 
   if (ordered.length === 0) {
@@ -25,14 +26,14 @@ export function Timeline({ entries }: { entries: TimelineEntry[] }) {
     <ol className="space-y-5">
       {ordered.map((entry) => (
         <li key={entry.id}>
-          <TimelineItem entry={entry} />
+          <TimelineItem entry={entry} caseId={caseId} />
         </li>
       ))}
     </ol>
   )
 }
 
-function TimelineItem({ entry }: { entry: TimelineEntry }) {
+function TimelineItem({ entry, caseId }: { entry: TimelineEntry; caseId: string }) {
   switch (entry.kind) {
     case 'created':
       return (
@@ -63,13 +64,7 @@ function TimelineItem({ entry }: { entry: TimelineEntry }) {
     case 'file':
       return (
         <Bubble entry={entry}>
-          {entry.file ? (
-            <span className="inline-flex items-center gap-2 text-sm text-inkSoft">
-              <Paperclip aria-hidden="true" className="size-4 shrink-0 text-mute" />
-              <span className="font-medium">{entry.file.title}</span>
-              <span className="font-mono text-xs text-mute">{formatBytes(entry.file.sizeBytes)}</span>
-            </span>
-          ) : null}
+          {entry.file ? <FileChip caseId={caseId} file={entry.file} /> : null}
         </Bubble>
       )
   }
@@ -121,7 +116,7 @@ function Bubble({ entry, children }: { entry: TimelineEntry; children: React.Rea
 function EmailBody({ entry }: { entry: TimelineEntry }) {
   const [expanded, setExpanded] = useState(false)
   const cleanHtml = useMemo(
-    () => (entry.bodyHtml ? DOMPurify.sanitize(entry.bodyHtml, { USE_PROFILES: { html: true } }) : ''),
+    () => (entry.bodyHtml ? sanitizeEmailHtml(entry.bodyHtml) : ''),
     [entry.bodyHtml],
   )
   const bodyId = `email-body-${entry.id}`
@@ -141,7 +136,7 @@ function EmailBody({ entry }: { entry: TimelineEntry }) {
               !expanded &&
                 'max-h-36 [mask-image:linear-gradient(to_bottom,black_60%,transparent)]',
             )}
-            // Sanitized above with DOMPurify — the only dangerouslySetInnerHTML in the app.
+            // Sanitized via sanitizeEmailHtml — the only dangerouslySetInnerHTML in the app.
             dangerouslySetInnerHTML={{ __html: cleanHtml }}
           />
           <button

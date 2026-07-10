@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders, seedSession } from '@/test/test-utils'
+import { renderWithProviders, seedImpersonatedSession, seedSession } from '@/test/test-utils'
 import { CaseCreatePage } from './case-create-page'
 
 function renderCreate() {
@@ -101,6 +101,14 @@ describe('CaseCreatePage', () => {
     expect(screen.getByText(/log-6\.txt: only 5 files per case\./)).toBeInTheDocument()
     expect(screen.getByText('log-5.txt')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Remove log-1.txt' })).toBeInTheDocument()
+  })
+
+  it('redirects impersonated (read-only) sessions back to the list', () => {
+    seedImpersonatedSession()
+    renderWithProviders(<CaseCreatePage />, { route: '/cases/new', path: '/cases/new' })
+
+    expect(screen.getByText('stub:/cases')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Create a case' })).not.toBeInTheDocument()
   })
 
   it('submits a problem case and lands on the success screen with the case number', async () => {

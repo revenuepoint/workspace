@@ -1,6 +1,4 @@
-import { useEffect } from 'react'
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
-import { registerUnauthorizedNavigator } from '@/lib/api'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from '@/components/app-shell'
 import { AuthGate } from '@/features/auth/auth-gate'
 import { LoginPage } from '@/features/auth/login-page'
@@ -11,13 +9,6 @@ import { CaseDetailPage } from '@/features/cases/case-detail-page'
 import { NotFoundPage } from '@/features/not-found-page'
 
 export default function App() {
-  const navigate = useNavigate()
-
-  // Session-expired 401s route back to /login via client-side navigation.
-  useEffect(() => {
-    registerUnauthorizedNavigator(navigate)
-  }, [navigate])
-
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />

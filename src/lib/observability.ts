@@ -7,9 +7,8 @@ let rumInitialized = false
 /**
  * Datadog RUM — only initializes when both VITE_DD_APP_ID and
  * VITE_DD_CLIENT_TOKEN are set (they're empty in dev and mock builds).
- * CSP note: connect-src allows https://*.datadoghq.com; if the intake for
- * your DD org resolves to browser-intake-datadoghq.com, add it to the CSP
- * before enabling RUM in production.
+ * CSP note: connect-src allows *.datadoghq.com AND the SDK's default US1
+ * intake, browser-intake-datadoghq.com (index.html + the api app's header).
  */
 export function initObservability(): boolean {
   if (rumInitialized) return true
