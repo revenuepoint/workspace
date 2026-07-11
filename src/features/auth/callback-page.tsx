@@ -34,6 +34,11 @@ const ERROR_COPY: Record<ErrorCode, { heading: string; body: string; cta: string
   },
 }
 
+/** Accept only in-app absolute paths from the server (defense-in-depth). */
+function safeReturnTo(path: string | undefined): string | null {
+  return path && path.startsWith('/') && !path.startsWith('//') ? path : null
+}
+
 function consumeReturnTo(): string {
   try {
     const stored = window.localStorage.getItem(RETURN_TO_KEY)
@@ -73,7 +78,9 @@ export function LoginCallbackPage() {
       .then((result) => {
         login(result.sessionJwt, result.contact)
         identifyUser(result.contact)
-        navigate(consumeReturnTo(), { replace: true })
+        // An email deep-link carries its own destination (server-validated);
+        // otherwise fall back to the same-browser returnTo (or /cases).
+        navigate(safeReturnTo(result.returnTo) ?? consumeReturnTo(), { replace: true })
       })
       .catch((error: unknown) => {
         if (

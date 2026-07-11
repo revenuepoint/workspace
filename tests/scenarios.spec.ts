@@ -76,6 +76,14 @@ test('a case draft survives navigating away', async ({ page }) => {
   await expect(page.getByText(/Picked up where you left off/)).toBeVisible()
 })
 
+test('an email deep-link signs in and lands on the case', async ({ page }) => {
+  // Fresh browser, no prior session — the token carries its own destination.
+  await page.goto('/login/callback?token=deeplink:/cases/case-0002')
+
+  await expect(page).toHaveURL(/\/cases\/case-0002$/)
+  await expect(page.getByRole('heading', { name: /Payment webhook retries/ })).toBeVisible()
+})
+
 test('attachment preview opens under the strict CSP', async ({ page }) => {
   // The dev server strips the CSP; this runs against the built dist + real
   // CSP, so it proves blob: iframe/img preview isn't blocked in production.

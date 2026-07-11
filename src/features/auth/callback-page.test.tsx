@@ -21,6 +21,15 @@ describe('LoginCallbackPage', () => {
     expect(useSessionStore.getState().contact?.email).toBe('dana.whitfield@acmecorp.com')
   })
 
+  it('lands on the deep-link case from a returnTo (email one-click sign-in)', async () => {
+    renderCallback('?token=deeplink:/cases/case-0002')
+
+    expect(await screen.findByText('stub:/cases/:id')).toBeInTheDocument()
+    expect(useSessionStore.getState().jwt).toBe(MOCK_SESSION_JWT)
+    // No same-browser returnTo was set — the destination came from the server.
+    expect(window.localStorage.getItem(RETURN_TO_KEY)).toBeNull()
+  })
+
   it('returns to the stored location after sign-in and consumes it', async () => {
     window.localStorage.setItem(RETURN_TO_KEY, '/cases/case-0001')
     renderCallback('?token=demo')

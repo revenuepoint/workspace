@@ -135,7 +135,13 @@ export const handlers = [
             { status: 401 },
           )
         }
-        const body: AuthCompleteResponse = { sessionJwt: MOCK_SESSION_JWT, contact: seedContact }
+        // Email deep-link tokens carry a return path (e.g. "deeplink:/cases/case-0002").
+        const deepLink = token.startsWith('deeplink:') ? token.slice('deeplink:'.length) : undefined
+        const body: AuthCompleteResponse = {
+          sessionJwt: MOCK_SESSION_JWT,
+          contact: seedContact,
+          ...(deepLink ? { returnTo: deepLink } : {}),
+        }
         return HttpResponse.json(body)
       }
     }

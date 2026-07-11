@@ -78,6 +78,9 @@ can't carry: `frame-ancestors 'none'` and HSTS.
   default US1 intake, alongside `*.datadoghq.com`.
 - GA4: enabling `VITE_GA_ID` requires adding `https://www.googletagmanager.com` to
   `script-src` and `https://*.google-analytics.com` to `connect-src`.
+- Attachment preview: `img-src` and `frame-src` include `blob:` so images and native-PDF
+  iframes can render from the downloaded blob. `object-src` stays `'none'` (we use
+  `<iframe>`, not `<embed>`). Keep the meta tag and the api app's `SPA_CSP` header identical.
 
 ### Accepted session-security tradeoffs
 
@@ -85,4 +88,6 @@ The session JWT lives in `localStorage` (an XSS could read it) — accepted for 
 magic-link/bearer contract because the CSP allows no third-party script and every
 dependency is bundled; revisit if the CSP ever loosens. Datadog RUM identifies users by
 email (no opaque contact id exists in the auth contract) with session replay masking
-user input.
+user input. **Email deep-links** (the "open my case" button) are 30-day reusable sign-in
+links — a forwarded email grants that contact's access for the window; mitigated by per-use
+eligibility re-checks, `/auth/complete` rate-limiting, and disabled email click-tracking.

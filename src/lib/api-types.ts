@@ -29,6 +29,8 @@ export interface AuthStartResponse {
 export interface AuthCompleteResponse {
   sessionJwt: string
   contact: Contact
+  /** Present for email deep-links: the in-app path to land on (e.g. "/cases/…"). */
+  returnTo?: string
 }
 
 export type AuthCompleteErrorCode = 'expired_link' | 'invalid_link' | 'link_already_used'
