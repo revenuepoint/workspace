@@ -3,19 +3,21 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as RadioGroup from '@radix-ui/react-radio-group'
 import { Bug, CircleCheck, HelpCircle, Sparkles, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import type { CreateCaseResponse } from '@/lib/api-types'
 import { cn } from '@/lib/utils'
+import { useSessionStore } from '@/stores/session'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Field, FieldError, FieldHint, MicroLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { FileDropZone } from './file-drop-zone'
+import { ParticipantPicker } from './participant-picker'
 
 /**
  * Draft safety: text fields autosave to sessionStorage on change and restore
@@ -130,8 +132,21 @@ const URGENCY_OPTIONS = ['Critical', 'High', 'Medium', 'Low', 'Lowest']
 export function CaseCreatePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const selfEmail = useSessionStore((s) => s.contact?.email ?? '')
   const [files, setFiles] = useState<File[]>([])
+  const [participantIds, setParticipantIds] = useState<string[]>([])
   const [created, setCreated] = useState<CreateCaseResponse | null>(null)
+
+  // Colleagues at the account (minus yourself — you're the submitter, always added).
+  const contactsQuery = useQuery({
+    queryKey: ['account-contacts'],
+    queryFn: () => api.listAccountContacts(),
+    staleTime: 5 * 60_000,
+  })
+  const colleagues = (contactsQuery.data?.contacts ?? []).filter(
+    (c) => c.email.toLowerCase() !== selfEmail.toLowerCase(),
+  )
+  const chosenParticipants = colleagues.filter((c) => participantIds.includes(c.contactId))
   // Read once on mount; the note offers "start fresh" when content came back.
   const [restoredDraft] = useState(() => readDraft())
   const [showRestoredNote, setShowRestoredNote] = useState(() => draftHasContent(restoredDraft))
@@ -176,6 +191,7 @@ export function CaseCreatePage() {
           urgency: values.urgency || undefined,
           businessJustification:
             values.recordType === 'change' ? values.businessJustification?.trim() || undefined : undefined,
+          participants: participantIds.length ? participantIds : undefined,
           files,
         },
         files.length > 0 ? setUploadProgress : undefined,
@@ -362,6 +378,20 @@ export function CaseCreatePage() {
             </FieldHint>
           </Field>
         ) : null}
+
+        {/* Participants — colleagues to keep in the loop (CC'd on replies) */}
+        <Field>
+          <MicroLabel>Keep colleagues in the loop</MicroLabel>
+          <ParticipantPicker
+            contacts={colleagues}
+            participants={chosenParticipants}
+            onAdd={(id) => setParticipantIds((ids) => [...new Set([...ids, id])])}
+            onRemove={(id) => setParticipantIds((ids) => ids.filter((x) => x !== id))}
+          />
+          <FieldHint>
+            They&rsquo;ll be copied on updates and can see the case in their own workspace. Optional.
+          </FieldHint>
+        </Field>
 
         {/* Files */}
         <Field>

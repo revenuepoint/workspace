@@ -12,20 +12,22 @@ function renderList() {
 }
 
 describe('CasesListPage', () => {
-  it('defaults to the signed-in contact’s own cases with scoped counts', async () => {
+  it('defaults to the signed-in contact’s own cases (submitted or participant)', async () => {
     renderList()
 
     expect(await screen.findByRole('heading', { name: 'Acme Corp · Cases' })).toBeInTheDocument()
-    // Dana's own open case shows…
+    // Dana's own submitted case shows…
     expect(await screen.findByText('Quarterly invoice shows duplicate line items')).toBeInTheDocument()
-    // …a colleague's case (Marcus Feld) does NOT, in the default "My cases" view.
+    // …and a colleague's case she's a PARTICIPANT on also shows (mine includes CC'd)…
+    expect(screen.getByText('Dashboard totals off by a day for UTC+ users')).toBeInTheDocument()
+    // …but a colleague's case she's not on does NOT.
     expect(screen.queryByText('Payment webhook retries failing since Friday')).not.toBeInTheDocument()
 
-    // "My cases" scope active; status pills show Dana's counts (4 open / 3 closed).
+    // "My cases" scope active; counts = Dana's 5 open (4 submitted + 1 participant) / 3 closed.
     expect(screen.getByRole('button', { name: /My cases/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: /Open \(4\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Open \(5\)/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Closed \(3\)/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /All \(7\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /All \(8\)/ })).toBeInTheDocument()
 
     expect(screen.getByRole('columnheader', { name: /Case #/ })).toBeInTheDocument()
   })

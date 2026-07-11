@@ -1,4 +1,4 @@
-import type { CaseDetail, Contact, FileMeta, TimelineEntry } from '@/lib/api-types'
+import type { CaseDetail, CaseParticipant, Contact, FileMeta, TimelineEntry } from '@/lib/api-types'
 
 /**
  * Seed data for MSW — one realistic client account ("Acme Corp") with
@@ -19,6 +19,17 @@ export const seedContact: Contact = {
 }
 
 const COLLEAGUE = 'Marcus Feld'
+
+/** Eligible contacts at Acme Corp — the participant picker's source. */
+export const seedAccountContacts: CaseParticipant[] = [
+  { contactId: 'c-dana', name: 'Dana Whitfield', email: 'dana.whitfield@acmecorp.com' },
+  { contactId: 'c-marcus', name: 'Marcus Feld', email: 'marcus.feld@acmecorp.com' },
+  { contactId: 'c-priya', name: 'Priya Anand', email: 'priya.anand@acmecorp.com' },
+  { contactId: 'c-lena', name: 'Lena Ortiz', email: 'lena.ortiz@acmecorp.com' },
+]
+
+const danaParticipant: CaseParticipant = seedAccountContacts[0]!
+const marcusParticipant: CaseParticipant = seedAccountContacts[1]!
 
 function ago(days: number, hours = 0): string {
   return new Date(Date.now() - (days * 24 + hours) * 60 * 60 * 1000).toISOString()
@@ -142,6 +153,7 @@ export function seedCases(): CaseDetail[] {
         'This blocks our reconciliation — the totals no longer tie out to the ledger. Happy to share a sample export on request.',
       timeline: structuredClone(case1Timeline),
       files: structuredClone(case1Files),
+      participants: [danaParticipant, marcusParticipant],
     },
     {
       id: 'case-0002',
@@ -313,6 +325,9 @@ export function seedCases(): CaseDetail[] {
         },
       ],
       files: [],
+      // Marcus submitted this; Dana is a CC'd participant → it appears in her
+      // "My cases" even though she didn't submit it.
+      participants: [marcusParticipant, danaParticipant],
     },
     {
       // Spec: one case with an intentionally empty timeline.

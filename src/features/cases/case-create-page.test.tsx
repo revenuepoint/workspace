@@ -146,6 +146,20 @@ describe('CaseCreatePage', () => {
     expect(screen.queryByText(/Attached files aren.t saved with drafts/)).not.toBeInTheDocument()
   })
 
+  it('adds a colleague as a participant and sends them with the case', async () => {
+    const user = userEvent.setup()
+    renderCreate()
+
+    await user.type(screen.getByLabelText('Subject'), 'Need a hand')
+    await user.type(screen.getByLabelText('Description'), 'Please loop in my colleague.')
+    // The picker offers account colleagues (minus Dana herself).
+    await user.selectOptions(await screen.findByLabelText('Add a colleague'), 'c-marcus')
+    expect(await screen.findByText('Marcus Feld')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Send to RevenuePoint' }))
+    expect(await screen.findByText('Case created')).toBeInTheDocument()
+  })
+
   it('renders the form for impersonated (acting) sessions', () => {
     seedImpersonatedSession()
     renderWithProviders(<CaseCreatePage />, { route: '/cases/new', path: '/cases/new' })

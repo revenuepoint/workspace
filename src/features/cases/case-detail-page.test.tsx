@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders, seedImpersonatedSession, seedSession } from '@/test/test-utils'
 import { CaseDetailPage } from './case-detail-page'
@@ -122,6 +122,25 @@ describe('CaseDetailPage', () => {
     const strong = screen.getByText('twice')
     expect(strong.tagName).toBe('STRONG')
     expect(screen.getByText('Duplicated rows inflate the invoice total')).toBeInTheDocument()
+  })
+
+  it('shows participants, locks the current user, and adds/removes colleagues', async () => {
+    const user = userEvent.setup()
+    renderDetail('case-0001') // seeded with Dana (you) + Marcus
+    await screen.findByRole('heading', { name: /Quarterly invoice/ })
+
+    const panel = screen.getByRole('region', { name: 'Participants' })
+    expect(within(panel).getByText('Dana Whitfield')).toBeInTheDocument()
+    expect(within(panel).getByText('you')).toBeInTheDocument() // can't remove yourself
+    expect(within(panel).getByText('Marcus Feld')).toBeInTheDocument()
+
+    // Remove Marcus.
+    await user.click(within(panel).getByRole('button', { name: /Remove Marcus Feld/ }))
+    await waitFor(() => expect(within(panel).queryByText('Marcus Feld')).not.toBeInTheDocument())
+
+    // Add a colleague from the picker.
+    await user.selectOptions(within(panel).getByLabelText('Add a colleague'), 'c-priya')
+    expect(await within(panel).findByText('Priya Anand')).toBeInTheDocument()
   })
 
   it('shows who has the case when it is with a person, not a queue', async () => {

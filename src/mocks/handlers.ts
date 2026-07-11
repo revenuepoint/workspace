@@ -1,8 +1,11 @@
 import { http, HttpResponse } from 'msw'
 import type {
+  AccountContactsResponse,
   AddCommentResponse,
+  AddParticipantResponse,
   AuthCompleteResponse,
   CaseDetail,
+  CaseParticipant,
   CaseSummary,
   CasesListResponse,
   CreateCaseResponse,
@@ -11,7 +14,13 @@ import type {
   TimelineEntry,
   UploadFilesResponse,
 } from '@/lib/api-types'
-import { MOCK_IMPERSONATED_JWT, MOCK_SESSION_JWT, seedCases, seedContact } from './fixtures'
+import {
+  MOCK_IMPERSONATED_JWT,
+  MOCK_SESSION_JWT,
+  seedAccountContacts,
+  seedCases,
+  seedContact,
+} from './fixtures'
 
 // MSW handlers implementing the FROZEN v1 client API contract exactly.
 // Paths are origin-agnostic (a leading "*" wildcard before "/v1/...") so the
@@ -55,9 +64,33 @@ function isAuthorized(request: Request): boolean {
 
 const SEED_CONTACT_NAME = `${seedContact.firstName} ${seedContact.lastName}`
 
-/** Mock "mine" = the case's submitter is the seed contact (the real API keys on ContactId). */
+/** Submitter (seed contact) + the account-validated participant picks from the form. */
+function participantsFromForm(form: FormData): CaseParticipant[] {
+  const submitter = seedAccountContacts.find(
+    (c) => c.email.toLowerCase() === seedContact.email.toLowerCase(),
+  ) ?? { contactId: 'c-self', name: SEED_CONTACT_NAME, email: seedContact.email }
+  const out: CaseParticipant[] = [submitter]
+  const raw = form.get('participants')
+  if (typeof raw === 'string') {
+    try {
+      const ids = JSON.parse(raw) as unknown
+      if (Array.isArray(ids)) {
+        for (const id of ids) {
+          const c = seedAccountContacts.find((x) => x.contactId === id)
+          if (c && !out.some((p) => p.contactId === c.contactId)) out.push(c)
+        }
+      }
+    } catch {
+      // ignore malformed participants in the mock
+    }
+  }
+  return out
+}
+
+/** Mock "mine" = the seed contact submitted the case OR is a participant on it. */
 function isMine(c: CaseDetail): boolean {
-  return c.submittedBy?.name === SEED_CONTACT_NAME
+  if (c.submittedBy?.name === SEED_CONTACT_NAME) return true
+  return (c.participants ?? []).some((p) => p.email.toLowerCase() === seedContact.email.toLowerCase())
 }
 
 function toSummary(c: CaseDetail): CaseSummary {
@@ -240,6 +273,8 @@ export const handlers = [
       submittedBy: { name: `${seedContact.firstName} ${seedContact.lastName}` },
       owner: { name: 'Client Success', isQueue: true },
       description,
+      // Submitter is always a participant; add the account-validated picks.
+      participants: participantsFromForm(form),
       timeline,
       files: fileMetas,
     }
@@ -259,6 +294,35 @@ export const handlers = [
     const found = db.find((c) => c.id === params.id)
     if (!found) return notFound()
     return HttpResponse.json(found)
+  }),
+
+  // --- Participant picker: eligible account contacts -----------------------
+  http.get('*/v1/client/contacts', ({ request }) => {
+    if (!isAuthorized(request)) return unauthorized()
+    return HttpResponse.json({ contacts: seedAccountContacts } satisfies AccountContactsResponse)
+  }),
+
+  // --- Participants: add / remove ------------------------------------------
+  http.post('*/v1/client/cases/:id/participants', async ({ request, params }) => {
+    if (!isAuthorized(request)) return unauthorized()
+    const found = db.find((c) => c.id === params.id)
+    if (!found) return notFound()
+    const { contactId } = (await request.json()) as { contactId?: string }
+    const contact = seedAccountContacts.find((c) => c.contactId === contactId)
+    if (!contact) return notFound() // not an eligible account contact
+    found.participants = found.participants ?? []
+    if (!found.participants.some((p) => p.contactId === contact.contactId)) {
+      found.participants.push(contact)
+    }
+    return HttpResponse.json({ participant: contact } satisfies AddParticipantResponse, { status: 201 })
+  }),
+
+  http.delete('*/v1/client/cases/:id/participants/:contactId', ({ request, params }) => {
+    if (!isAuthorized(request)) return unauthorized()
+    const found = db.find((c) => c.id === params.id)
+    if (!found) return notFound()
+    found.participants = (found.participants ?? []).filter((p) => p.contactId !== params.contactId)
+    return new HttpResponse(null, { status: 204 })
   }),
 
   // --- Comments ------------------------------------------------------------

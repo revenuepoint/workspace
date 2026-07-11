@@ -101,6 +101,13 @@ export interface TimelineEntry {
   file?: FileMeta
 }
 
+/** A case participant (CC'd colleague) — a contact linked via CaseContactLink__c. */
+export interface CaseParticipant {
+  contactId: string
+  name: string
+  email: string
+}
+
 /** GET /v1/client/cases/:id — 200. */
 export interface CaseDetail extends CaseSummary {
   description: string
@@ -109,8 +116,19 @@ export interface CaseDetail extends CaseSummary {
   /** Raw SF values; the SPA maps them to client-facing labels. Null when blank. */
   urgency?: string | null
   priority?: string | null
+  participants?: CaseParticipant[]
   timeline: TimelineEntry[]
   files: FileMeta[]
+}
+
+/** GET /v1/client/contacts — eligible colleagues at the account (participant picker). */
+export interface AccountContactsResponse {
+  contacts: CaseParticipant[]
+}
+
+/** POST /v1/client/cases/:id/participants — 201. */
+export interface AddParticipantResponse {
+  participant: CaseParticipant
 }
 
 /** POST /v1/client/cases (multipart) — 201. */

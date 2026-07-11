@@ -4,16 +4,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleCheck, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
-import type { CaseDetail } from '@/lib/api-types'
+import type { CaseDetail, CaseParticipant } from '@/lib/api-types'
 import { formatDate, relativeTime } from '@/lib/format'
 import { priorityLabelFor } from '@/lib/priority'
 import { renderMarkdown } from '@/lib/sanitize'
+import { useSessionStore } from '@/stores/session'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { StatusChip } from '@/components/ui/status-chip'
 import { CasePath } from './case-path'
 import { CommentComposer } from './comment-composer'
 import { FileChip } from './file-chip'
+import { ParticipantPicker } from './participant-picker'
 import { Timeline } from './timeline'
 
 export function CaseDetailPage() {
@@ -152,9 +154,8 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
         </div>
       ) : null}
 
-      {/* Description + Files — two columns on wide screens; Files (usually
-          important) ride a sticky right rail instead of the page bottom.
-          Description is client-authored Markdown, sanitized before render. */}
+      {/* Description + right rail (Participants, Files) — two columns on wide
+          screens. Description is client-authored Markdown, sanitized before render. */}
       <div className="mt-8 lg:grid lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start lg:gap-10">
         <section aria-labelledby="case-description-heading">
           <h2 id="case-description-heading" className="micro-label">
@@ -163,23 +164,24 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
           <CaseDescription markdown={detail.description} />
         </section>
 
-        {detail.files.length > 0 ? (
-          <section
-            aria-labelledby="case-files-heading"
-            className="mt-8 lg:sticky lg:top-6 lg:mt-0"
-          >
-            <h2 id="case-files-heading" className="micro-label">
-              Files
-            </h2>
-            <ul className="mt-2.5 flex flex-wrap gap-2 lg:flex-col">
-              {detail.files.map((file) => (
-                <li key={file.contentDocumentId}>
-                  <FileChip caseId={detail.id} file={file} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+        <div className="mt-8 space-y-8 lg:sticky lg:top-6 lg:mt-0">
+          <ParticipantsPanel detail={detail} />
+
+          {detail.files.length > 0 ? (
+            <section aria-labelledby="case-files-heading">
+              <h2 id="case-files-heading" className="micro-label">
+                Files
+              </h2>
+              <ul className="mt-2.5 flex flex-wrap gap-2 lg:flex-col">
+                {detail.files.map((file) => (
+                  <li key={file.contentDocumentId}>
+                    <FileChip caseId={detail.id} file={file} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
       </div>
 
       {/* Composer + resolve lead the activity block, so the newest entries
@@ -209,6 +211,73 @@ function ComposerSection({ detail }: { detail: CaseDetail }) {
       <CommentComposer caseId={detail.id} />
       {detail.statusGroup === 'open' ? <ResolveRow caseId={detail.id} /> : null}
     </div>
+  )
+}
+
+/**
+ * Participants (CC'd colleagues) — see, add, remove. Add/remove hit the API and
+ * optimistically update the cached case, mirroring the comment composer's
+ * rollback-on-failure. You can't remove yourself here (the locked "you" chip).
+ */
+function ParticipantsPanel({ detail }: { detail: CaseDetail }) {
+  const queryClient = useQueryClient()
+  const selfEmail = useSessionStore((s) => s.contact?.email ?? '')
+  const detailKey = ['case', detail.id] as const
+  const participants = detail.participants ?? []
+
+  const contactsQuery = useQuery({
+    queryKey: ['account-contacts'],
+    queryFn: () => api.listAccountContacts(),
+    staleTime: 5 * 60_000,
+  })
+
+  const setParticipants = (next: (list: CaseParticipant[]) => CaseParticipant[]) =>
+    queryClient.setQueryData<CaseDetail>(detailKey, (old) =>
+      old ? { ...old, participants: next(old.participants ?? []) } : old,
+    )
+
+  const addMutation = useMutation({
+    mutationFn: (contactId: string) => api.addParticipant(detail.id, contactId),
+    onSuccess: (res) =>
+      setParticipants((list) =>
+        list.some((p) => p.contactId === res.participant.contactId) ? list : [...list, res.participant],
+      ),
+    onError: () => toast.error('Couldn’t add that colleague. Give it another try.'),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: detailKey }),
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (contactId: string) => api.removeParticipant(detail.id, contactId),
+    onMutate: (contactId) => {
+      const previous = queryClient.getQueryData<CaseDetail>(detailKey)
+      setParticipants((list) => list.filter((p) => p.contactId !== contactId))
+      return { previous }
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous)
+      toast.error('Couldn’t remove that colleague. Give it another try.')
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: detailKey }),
+  })
+
+  const busy = addMutation.isPending || removeMutation.isPending
+
+  return (
+    <section aria-labelledby="case-participants-heading">
+      <h2 id="case-participants-heading" className="micro-label">
+        Participants
+      </h2>
+      <div className="mt-2.5">
+        <ParticipantPicker
+          contacts={contactsQuery.data?.contacts ?? []}
+          participants={participants}
+          onAdd={(id) => addMutation.mutate(id)}
+          onRemove={(id) => removeMutation.mutate(id)}
+          lockedEmail={selfEmail}
+          busy={busy}
+        />
+      </div>
+    </section>
   )
 }
 

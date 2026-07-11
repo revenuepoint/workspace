@@ -92,6 +92,23 @@ test('the case list defaults to "My cases" and can show all', async ({ page }) =
   await expect(page.getByText('Payment webhook retries failing since Friday')).toBeVisible()
 })
 
+test('case participants: see, add, and remove colleagues', async ({ page }) => {
+  await page.goto('/login/callback?token=e2e-participants')
+  await page.getByRole('link', { name: 'Quarterly invoice shows duplicate line items' }).click()
+  await expect(page.getByRole('heading', { name: /Quarterly invoice/ })).toBeVisible()
+
+  const panel = page.getByRole('region', { name: 'Participants' })
+  await expect(panel.getByText('Dana Whitfield')).toBeVisible()
+  await expect(panel.getByText('you')).toBeVisible() // your own chip is locked
+  await expect(panel.getByText('Marcus Feld')).toBeVisible()
+
+  // Add a colleague, then remove Marcus.
+  await panel.getByLabel('Add a colleague').selectOption('c-priya')
+  await expect(panel.getByText('Priya Anand')).toBeVisible()
+  await panel.getByRole('button', { name: /Remove Marcus Feld/ }).click()
+  await expect(panel.getByText('Marcus Feld')).toBeHidden()
+})
+
 test('an email deep-link signs in and lands on the case', async ({ page }) => {
   // Fresh browser, no prior session — the token carries its own destination.
   await page.goto('/login/callback?token=deeplink:/cases/case-0002')

@@ -1,7 +1,9 @@
 import { toast } from 'sonner'
 import { RETURN_TO_KEY, useSessionStore } from '@/stores/session'
 import type {
+  AccountContactsResponse,
   AddCommentResponse,
+  AddParticipantResponse,
   ApiErrorBody,
   AuthCompleteResponse,
   AuthStartResponse,
@@ -57,7 +59,7 @@ function handleSessionExpired(): void {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'DELETE'
   /** JSON body — sets Content-Type. (Multipart goes over xhrMultipart instead.) */
   json?: unknown
   /** false for the auth endpoints, where a 401 is a link problem, not an expired session. */
@@ -149,6 +151,8 @@ export interface CreateCaseInput {
   impact?: string
   urgency?: string
   businessJustification?: string
+  /** Extra participant contact ids to CC on the case. */
+  participants?: string[]
   files: File[]
 }
 
@@ -247,10 +251,30 @@ export const api = {
         impact: input.impact,
         urgency: input.urgency,
         businessJustification: input.businessJustification,
+        // Multipart collapses repeated keys, so participant ids ride one JSON field.
+        participants: input.participants?.length ? JSON.stringify(input.participants) : undefined,
       },
       input.files,
     )
     return xhrMultipart('/v1/client/cases', formData, onProgress)
+  },
+
+  listAccountContacts(): Promise<AccountContactsResponse> {
+    return request('/v1/client/contacts')
+  },
+
+  addParticipant(caseId: string, contactId: string): Promise<AddParticipantResponse> {
+    return request(`/v1/client/cases/${encodeURIComponent(caseId)}/participants`, {
+      method: 'POST',
+      json: { contactId },
+    })
+  },
+
+  async removeParticipant(caseId: string, contactId: string): Promise<void> {
+    await rawRequest(
+      `/v1/client/cases/${encodeURIComponent(caseId)}/participants/${encodeURIComponent(contactId)}`,
+      { method: 'DELETE' },
+    )
   },
 
   addComment(caseId: string, body: string): Promise<AddCommentResponse> {
