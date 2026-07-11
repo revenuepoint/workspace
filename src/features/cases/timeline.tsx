@@ -7,12 +7,13 @@ import { cn } from '@/lib/utils'
 import { FileChip } from './file-chip'
 
 /**
- * Case timeline — chronological, newest LAST (chat order). Client entries
- * sit right in navyTint bubbles, RevenuePoint entries left in paper bubbles,
- * system events are centered mono pills.
+ * Case timeline — reverse-chronological, newest FIRST (the composer sits above
+ * the feed, so the latest activity is right under it). Client entries sit right
+ * in navyTint bubbles, RevenuePoint entries left in paper bubbles, system events
+ * are centered mono pills.
  */
 export function Timeline({ entries, caseId }: { entries: TimelineEntry[]; caseId: string }) {
-  const ordered = useMemo(() => [...entries].sort((a, b) => a.at.localeCompare(b.at)), [entries])
+  const ordered = useMemo(() => [...entries].sort((a, b) => b.at.localeCompare(a.at)), [entries])
 
   if (ordered.length === 0) {
     return (

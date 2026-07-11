@@ -152,53 +152,63 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
         </div>
       ) : null}
 
-      {/* Description — client-authored Markdown, sanitized before render. */}
-      <section aria-labelledby="case-description-heading" className="mt-8">
-        <h2 id="case-description-heading" className="micro-label">
-          Description
-        </h2>
-        <CaseDescription markdown={detail.description} />
-      </section>
-
-      {/* Files */}
-      {detail.files.length > 0 ? (
-        <section aria-labelledby="case-files-heading" className="mt-8">
-          <h2 id="case-files-heading" className="micro-label">
-            Files
+      {/* Description + Files — two columns on wide screens; Files (usually
+          important) ride a sticky right rail instead of the page bottom.
+          Description is client-authored Markdown, sanitized before render. */}
+      <div className="mt-8 lg:grid lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start lg:gap-10">
+        <section aria-labelledby="case-description-heading">
+          <h2 id="case-description-heading" className="micro-label">
+            Description
           </h2>
-          <ul className="mt-2.5 flex flex-wrap gap-2">
-            {detail.files.map((file) => (
-              <li key={file.contentDocumentId}>
-                <FileChip caseId={detail.id} file={file} />
-              </li>
-            ))}
-          </ul>
+          <CaseDescription markdown={detail.description} />
         </section>
-      ) : null}
 
-      {/* Timeline */}
-      <section aria-labelledby="case-activity-heading" className="mt-10 border-t border-rule/50 pt-8">
+        {detail.files.length > 0 ? (
+          <section
+            aria-labelledby="case-files-heading"
+            className="mt-8 lg:sticky lg:top-6 lg:mt-0"
+          >
+            <h2 id="case-files-heading" className="micro-label">
+              Files
+            </h2>
+            <ul className="mt-2.5 flex flex-wrap gap-2 lg:flex-col">
+              {detail.files.map((file) => (
+                <li key={file.contentDocumentId}>
+                  <FileChip caseId={detail.id} file={file} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
+
+      {/* Composer + resolve lead the activity block, so the newest entries
+          (feed is newest-first) sit right under the reply box. */}
+      <section
+        aria-labelledby="case-activity-heading"
+        className="mt-10 border-t border-rule/50 pt-8"
+      >
         <h2 id="case-activity-heading" className="micro-label">
           Activity
         </h2>
-        <div className="mt-5">
+        <ComposerSection detail={detail} />
+        <div className="mt-8">
           <Timeline entries={detail.timeline} caseId={detail.id} />
         </div>
       </section>
-
-      <ComposerSection detail={detail} />
     </article>
   )
 }
 
 function ComposerSection({ detail }: { detail: CaseDetail }) {
   // Impersonated sessions write too — the API attributes their entries to
-  // the actor and renders them RevenuePoint-side.
+  // the actor and renders them RevenuePoint-side. Sits inside the Activity
+  // section (above the feed), so no divider of its own.
   return (
-    <section className="mt-8 border-t border-rule/50 pt-6">
+    <div className="mt-5">
       <CommentComposer caseId={detail.id} />
       {detail.statusGroup === 'open' ? <ResolveRow caseId={detail.id} /> : null}
-    </section>
+    </div>
   )
 }
 

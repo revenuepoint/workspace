@@ -76,6 +76,31 @@ test('a case draft survives navigating away', async ({ page }) => {
   await expect(page.getByText(/Picked up where you left off/)).toBeVisible()
 })
 
+test('attachment preview opens under the strict CSP', async ({ page }) => {
+  // The dev server strips the CSP; this runs against the built dist + real
+  // CSP, so it proves blob: iframe/img preview isn't blocked in production.
+  const cspViolations: string[] = []
+  page.on('console', (msg) => {
+    if (/content security policy/i.test(msg.text())) cspViolations.push(msg.text())
+  })
+
+  await page.goto('/login/callback?token=e2e-preview')
+  await page.getByRole('link', { name: 'Quarterly invoice shows duplicate line items' }).click()
+  await expect(page.getByRole('heading', { name: /Quarterly invoice/ })).toBeVisible()
+
+  // The PDF attachment chip opens the preview dialog with a native PDF iframe.
+  await page.getByRole('button', { name: /Preview duplicate-lines-annotated\.pdf/ }).first().click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Download' })).toBeVisible()
+  await expect(dialog.locator('iframe')).toBeAttached()
+
+  await page.getByRole('button', { name: 'Close preview' }).click()
+  await expect(dialog).toBeHidden()
+
+  expect(cspViolations, cspViolations.join('\n')).toHaveLength(0)
+})
+
 test('impersonation sessions act with attribution', async ({ page }) => {
   await page.goto('/login/callback?token=impersonate-token')
 

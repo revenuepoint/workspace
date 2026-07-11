@@ -66,15 +66,30 @@ describe('CaseDetailPage', () => {
     expect(rpBubble?.className).toContain('justify-start')
   })
 
-  it('shows the files panel with name, size, and download affordance', async () => {
+  it('shows the files panel with name, size, and a preview affordance', async () => {
     renderDetail('case-0001')
     await screen.findByRole('heading', { name: /Quarterly invoice/ })
 
     expect(screen.getByRole('heading', { name: 'Files' })).toBeInTheDocument()
+    // PDF is previewable → the chip opens a preview (download lives inside it).
     expect(
-      screen.getByRole('button', { name: /Download duplicate-lines-annotated\.pdf/ }),
+      screen.getByRole('button', { name: /Preview duplicate-lines-annotated\.pdf/ }),
     ).toBeInTheDocument()
     expect(screen.getByText('403 KB')).toBeInTheDocument()
+  })
+
+  it('orders activity newest-first with the composer above the feed', async () => {
+    renderDetail('case-0001')
+    await screen.findByRole('heading', { name: /Quarterly invoice/ })
+
+    // Composer leads; the "Case created" system pill (oldest) is last.
+    const composer = screen.getByLabelText('Add a comment')
+    const created = screen.getByText(/Case created by Dana Whitfield/)
+    expect(composer.compareDocumentPosition(created) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    // Newest entry (the file chip, most recent `at`) precedes the oldest pill.
+    const newest = screen.getAllByText('invoice-march-export.csv')[0]!
+    expect(newest.compareDocumentPosition(created) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('renders the progress path with the current stage marked', async () => {
@@ -123,12 +138,13 @@ describe('CaseDetailPage', () => {
     expect(screen.queryByText(/With Client Success/)).not.toBeInTheDocument()
   })
 
-  it('makes timeline file entries downloadable', async () => {
+  it('makes timeline file entries previewable', async () => {
     renderDetail('case-0001')
     await screen.findByRole('heading', { name: /Quarterly invoice/ })
 
-    // Once in the Files panel, once as the timeline entry's chip.
-    expect(screen.getAllByRole('button', { name: /Download invoice-march-export\.csv/ })).toHaveLength(2)
+    // CSV is previewable → both the Files panel chip and the timeline entry
+    // chip open a preview.
+    expect(screen.getAllByRole('button', { name: /Preview invoice-march-export\.csv/ })).toHaveLength(2)
   })
 
   it('lets the client mark an open case resolved via a structured note', async () => {

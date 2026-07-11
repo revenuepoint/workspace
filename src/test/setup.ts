@@ -20,6 +20,26 @@ globalThis.File = (nativeClassProbe.get('f') as File).constructor as typeof File
 // jsdom doesn't implement scrollTo; the create-form success screen calls it.
 window.scrollTo = () => {}
 
+// jsdom doesn't implement <dialog> showModal/close (the attachment preview).
+if (!HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function showModal() {
+    this.open = true
+  }
+}
+if (!HTMLDialogElement.prototype.close) {
+  HTMLDialogElement.prototype.close = function close() {
+    this.open = false
+    this.dispatchEvent(new Event('close'))
+  }
+}
+// URL.createObjectURL / revokeObjectURL — used by preview + download.
+if (!('createObjectURL' in URL)) {
+  ;(URL as unknown as { createObjectURL: () => string }).createObjectURL = () => 'blob:mock'
+}
+if (!('revokeObjectURL' in URL)) {
+  ;(URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => {}
+}
+
 // jsdom lacks ResizeObserver (Radix radio-group's hidden form input measures itself).
 class ResizeObserverStub {
   observe() {}

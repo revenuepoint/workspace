@@ -217,4 +217,31 @@
     padding-left: 0.75em;
     color: var(--color-mute);
   }
+
+  /* Attachment preview — SheetJS spreadsheet table */
+  .preview-sheet table {
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  .preview-sheet td,
+  .preview-sheet th {
+    border: 1px solid var(--color-rule);
+    padding: 0.3em 0.6em;
+    white-space: nowrap;
+  }
+  .preview-sheet tr:first-child td {
+    background: var(--color-paper);
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  /* Attachment preview — docx-preview document surface */
+  .preview-doc .docx-wrapper {
+    background: transparent;
+    padding: 0;
+  }
+  .preview-doc .docx {
+    margin: 0 auto;
+    background: var(--color-card);
+  }
 }

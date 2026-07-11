@@ -17,6 +17,10 @@ export type StatusKey =
   | 'closed'
   | 'unknown'
 
+// Keys are the org's ACTUAL Case.Status picklist values, lowercased. Keep the
+// older shorthand spellings as aliases too — harmless, and defensive against
+// either spelling reaching the client. (Mismatched literals here silently
+// route a status to 'unknown' → gray chip + no progress path; see status.test.)
 const RAW_STATUS_TO_KEY: Record<string, StatusKey> = {
   // Received
   new: 'received',
@@ -27,12 +31,16 @@ const RAW_STATUS_TO_KEY: Record<string, StatusKey> = {
   'selected for development': 'inProgress',
   'in development': 'inProgress',
   'awaiting deployment': 'inProgress',
-  // In testing
+  // In testing — org emits "In UAT"
+  'in uat': 'inTesting',
   uat: 'inTesting',
-  // Waiting states
+  // Waiting states — org emits "Waiting for Customer/Vendor", "Blocked / On Hold"
+  'waiting for customer': 'waitingOnYou',
   'waiting on customer': 'waitingOnYou',
   'waiting on you': 'waitingOnYou',
+  'waiting for vendor': 'waitingOnVendor',
   'waiting on vendor': 'waitingOnVendor',
+  'blocked / on hold': 'onHold',
   'on hold': 'onHold',
   // Terminal-ish
   deployed: 'deployed',

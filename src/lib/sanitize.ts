@@ -20,6 +20,11 @@ export function sanitizeEmailHtml(html: string): string {
   return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
 }
 
+/** Generic HTML sanitize — e.g. the SheetJS-generated spreadsheet table. */
+export function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+}
+
 // GFM for tables/strikethrough; breaks:true so a single newline is a <br>
 // (clients write plain paragraphs, not double-newline Markdown). Raw HTML in
 // the source is left for DOMPurify to strip rather than trusting marked.
