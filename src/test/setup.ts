@@ -36,6 +36,7 @@ afterEach(() => {
   server.resetHandlers()
   resetMockDb()
   window.localStorage.clear()
+  window.sessionStorage.clear()
   useSessionStore.setState({ jwt: null, contact: null, expired: false })
 })
 

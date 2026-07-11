@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -17,6 +17,71 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { FileDropZone } from './file-drop-zone'
 
+/**
+ * Draft safety: text fields autosave to sessionStorage on change and restore
+ * on return, so navigating away never loses a half-written case. Files are
+ * never persisted (browsers can't re-hydrate File objects).
+ */
+const DRAFT_KEY = 'rp:workspace:case-draft'
+
+const EMPTY_FORM: CreateCaseForm = {
+  recordType: 'support',
+  subject: '',
+  description: '',
+  impact: '',
+  urgency: '',
+  businessJustification: '',
+}
+
+function readDraft(): CreateCaseForm | null {
+  try {
+    const raw = window.sessionStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<CreateCaseForm>
+    if (parsed.recordType !== 'support' && parsed.recordType !== 'problem' && parsed.recordType !== 'change') {
+      return null
+    }
+    const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+    return {
+      recordType: parsed.recordType,
+      subject: str(parsed.subject),
+      description: str(parsed.description),
+      impact: str(parsed.impact),
+      urgency: str(parsed.urgency),
+      businessJustification: str(parsed.businessJustification),
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeDraft(draft: Partial<CreateCaseForm>): void {
+  try {
+    window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+  } catch {
+    // Storage unavailable — the form still works, it just won't survive navigation.
+  }
+}
+
+function clearDraft(): void {
+  try {
+    window.sessionStorage.removeItem(DRAFT_KEY)
+  } catch {
+    // non-fatal
+  }
+}
+
+function draftHasContent(draft: CreateCaseForm | null): boolean {
+  if (!draft) return false
+  return Boolean(
+    draft.subject.trim() ||
+      draft.description.trim() ||
+      draft.impact ||
+      draft.urgency ||
+      draft.businessJustification?.trim(),
+  )
+}
+
 const createCaseSchema = z.object({
   recordType: z.enum(['support', 'problem', 'change']),
   subject: z
@@ -25,8 +90,8 @@ const createCaseSchema = z.object({
     .min(1, 'Give this case a subject — one line is plenty.')
     .max(255, 'Keep the subject under 255 characters; the details go below.'),
   description: z.string().trim().min(1, 'Tell us what’s going on — the more specific, the faster we can help.'),
-  impact: z.string().optional(),
-  urgency: z.string().optional(),
+  impact: z.string(),
+  urgency: z.string(),
   businessJustification: z.string().optional(),
 })
 
@@ -67,18 +132,37 @@ export function CaseCreatePage() {
   const queryClient = useQueryClient()
   const [files, setFiles] = useState<File[]>([])
   const [created, setCreated] = useState<CreateCaseResponse | null>(null)
+  // Read once on mount; the note offers "start fresh" when content came back.
+  const [restoredDraft] = useState(() => readDraft())
+  const [showRestoredNote, setShowRestoredNote] = useState(() => draftHasContent(restoredDraft))
+  const [confirmingLeave, setConfirmingLeave] = useState(false)
 
   const {
     control,
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<CreateCaseForm>({
     resolver: zodResolver(createCaseSchema),
-    defaultValues: { recordType: 'support', subject: '', description: '' },
+    defaultValues: restoredDraft ?? EMPTY_FORM,
   })
 
   const recordType = useWatch({ control, name: 'recordType' })
+  const formValues = useWatch({ control })
+
+  // Autosave: every change lands in sessionStorage, so nothing typed here is
+  // ever lost to navigation. Cleared on successful create / "start fresh".
+  useEffect(() => {
+    writeDraft(formValues)
+  }, [formValues])
+
+  function startFresh() {
+    clearDraft()
+    reset(EMPTY_FORM)
+    setFiles([])
+    setShowRestoredNote(false)
+  }
 
   const mutation = useMutation({
     mutationFn: (values: CreateCaseForm) =>
@@ -86,13 +170,14 @@ export function CaseCreatePage() {
         recordType: values.recordType,
         subject: values.subject,
         description: values.description,
-        impact: values.recordType === 'problem' ? values.impact : undefined,
-        urgency: values.recordType === 'problem' ? values.urgency : undefined,
+        impact: values.impact || undefined,
+        urgency: values.urgency || undefined,
         businessJustification:
           values.recordType === 'change' ? values.businessJustification?.trim() || undefined : undefined,
         files,
       }),
     onSuccess: (result) => {
+      clearDraft()
       setCreated(result)
       void queryClient.invalidateQueries({ queryKey: ['cases'] })
       window.scrollTo({ top: 0 })
@@ -101,6 +186,16 @@ export function CaseCreatePage() {
       toast.error('That didn’t go through. Your draft is still here — try again.')
     },
   })
+
+  function handleCancel() {
+    // Text fields live on in the draft; attached files can't. Only a leave
+    // that would drop files needs a confirmation.
+    if (files.length > 0) {
+      setConfirmingLeave(true)
+      return
+    }
+    navigate('/cases')
+  }
 
   if (created) {
     return <CreateSuccess result={created} />
@@ -127,6 +222,22 @@ export function CaseCreatePage() {
       <p className="mt-1.5 text-sm text-mute">
         Tell us once, properly — it goes straight to the team, no triage inbox.
       </p>
+
+      {showRestoredNote ? (
+        <p
+          role="status"
+          className="mt-6 flex flex-wrap items-baseline gap-x-2 rounded-md border border-rule/60 bg-paper px-4 py-3 text-sm leading-relaxed text-inkMid"
+        >
+          Picked up where you left off — this draft was saved automatically.
+          <button
+            type="button"
+            onClick={startFresh}
+            className="rounded-sm font-semibold text-crimson underline-offset-4 hover:underline"
+          >
+            Start fresh
+          </button>
+        </p>
+      ) : null}
 
       <form onSubmit={handleSubmit((values) => mutation.mutate(values))} noValidate className="mt-8 space-y-8">
         {/* Record type */}
@@ -175,51 +286,60 @@ export function CaseCreatePage() {
           {errors.subject ? <FieldError id="case-subject-error">{errors.subject.message}</FieldError> : null}
         </Field>
 
-        {/* Description */}
+        {/* Description — guided toward the structure triage rewrites tickets into. */}
         <Field>
           <MicroLabel htmlFor="case-description">Description</MicroLabel>
           <Textarea
             id="case-description"
-            rows={6}
-            placeholder="What happened, what you expected, and anything you’ve already tried."
+            rows={8}
+            placeholder={
+              'What’s going on?\n\n' +
+              'Context — where this happens and what you were doing.\n' +
+              'The ask — what you need from us.\n' +
+              'Done looks like — how we’ll both know it’s sorted.'
+            }
             aria-invalid={errors.description ? true : undefined}
-            aria-describedby={errors.description ? 'case-description-error' : undefined}
+            aria-describedby={
+              errors.description ? 'case-description-error case-description-hint' : 'case-description-hint'
+            }
             {...register('description')}
           />
           {errors.description ? (
             <FieldError id="case-description-error">{errors.description.message}</FieldError>
           ) : null}
+          <FieldHint id="case-description-hint">
+            The clearer the context and the ask, the faster this reaches the right person.
+          </FieldHint>
         </Field>
 
-        {/* Problem-only: impact + urgency */}
-        {recordType === 'problem' ? (
-          <div className="grid gap-6 rounded-lg border border-rule/60 bg-cream/60 p-5 sm:grid-cols-2">
-            <Field>
-              <MicroLabel htmlFor="case-impact">Impact</MicroLabel>
-              <Select id="case-impact" aria-describedby="case-impact-hint" {...register('impact')}>
-                <option value="">Not sure — skip it</option>
-                {IMPACT_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </Select>
-              <FieldHint id="case-impact-hint">How widely is this felt? Optional — your best guess helps us triage.</FieldHint>
-            </Field>
-            <Field>
-              <MicroLabel htmlFor="case-urgency">Urgency</MicroLabel>
-              <Select id="case-urgency" aria-describedby="case-urgency-hint" {...register('urgency')}>
-                <option value="">Not sure — skip it</option>
-                {URGENCY_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </Select>
-              <FieldHint id="case-urgency-hint">How soon does this bite? Optional too.</FieldHint>
-            </Field>
-          </div>
-        ) : null}
+        {/* Impact + urgency — every record type; triage sets them anyway, so a
+            good first guess from the person who feels it saves a round trip. */}
+        <div className="grid gap-6 rounded-lg border border-rule/60 bg-cream/60 p-5 sm:grid-cols-2">
+          <Field>
+            <MicroLabel htmlFor="case-impact">Impact</MicroLabel>
+            <Select id="case-impact" aria-describedby="case-impact-hint" {...register('impact')}>
+              <option value="">Not sure — skip it</option>
+              {IMPACT_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+            <FieldHint id="case-impact-hint">How widely is this felt? Optional — your best guess helps us triage.</FieldHint>
+          </Field>
+          <Field>
+            <MicroLabel htmlFor="case-urgency">Urgency</MicroLabel>
+            <Select id="case-urgency" aria-describedby="case-urgency-hint" {...register('urgency')}>
+              <option value="">Not sure — skip it</option>
+              {URGENCY_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+            <FieldHint id="case-urgency-hint">How soon does this bite? Optional too.</FieldHint>
+          </Field>
+        </div>
 
         {/* Change-only: business justification */}
         {recordType === 'change' ? (
@@ -244,10 +364,22 @@ export function CaseCreatePage() {
           <FileDropZone files={files} onChange={setFiles} />
         </Field>
 
-        <div className="flex items-center justify-between border-t border-rule/50 pt-6">
-          <Button type="button" variant="quiet" onClick={() => navigate('/cases')}>
-            Cancel
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule/50 pt-6">
+          {confirmingLeave ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-inkMid">Attached files aren&rsquo;t saved with drafts.</p>
+              <Button type="button" variant="neutral" size="sm" onClick={() => navigate('/cases')}>
+                Leave anyway
+              </Button>
+              <Button type="button" variant="quiet" size="sm" onClick={() => setConfirmingLeave(false)}>
+                Keep writing
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" variant="quiet" onClick={handleCancel}>
+              Cancel
+            </Button>
+          )}
           <Button type="submit" size="lg" disabled={mutation.isPending}>
             {mutation.isPending ? 'Sending…' : 'Send to RevenuePoint'}
           </Button>
@@ -268,7 +400,8 @@ function CreateSuccess({ result }: { result: CreateCaseResponse }) {
         #{result.caseNumber}
       </h1>
       <p className="mx-auto mt-4 max-w-sm text-[0.9375rem] leading-relaxed text-inkMid">
-        It&rsquo;s with our team. We&rsquo;ll reply by email, and every update lands on the case page too.
+        It&rsquo;s with our team — new cases are triaged within one business day. We&rsquo;ll reply
+        by email, and every update lands on the case page too.
       </p>
 
       {failedFiles.length > 0 ? (

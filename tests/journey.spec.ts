@@ -47,8 +47,8 @@ test('login → list → case detail → comment → create case', async ({ page
   await page.getByRole('link', { name: 'Create a case' }).click()
   await expect(page.getByRole('heading', { name: 'Create a case' })).toBeVisible()
 
-  // Conditional fields follow the record type
-  await expect(page.getByLabel('Impact')).toBeHidden()
+  // Impact/urgency ride along on every record type now.
+  await expect(page.getByLabel('Impact')).toBeVisible()
   await page.getByRole('radio', { name: /Something.s broken/ }).click()
   await expect(page.getByLabel('Impact')).toBeVisible()
 

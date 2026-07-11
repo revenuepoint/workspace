@@ -25,44 +25,31 @@ describe('CaseCreatePage', () => {
     expect(screen.getByRole('radio', { name: /Something.s broken/ })).not.toBeChecked()
     expect(screen.getByRole('radio', { name: /Change or new feature/ })).not.toBeChecked()
 
-    // Support shows neither triage selects nor justification
-    expect(screen.queryByLabelText('Impact')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Urgency')).not.toBeInTheDocument()
+    // Impact/urgency ride along on every type; justification is change-only.
+    expect(screen.getByLabelText('Impact')).toBeInTheDocument()
+    expect(screen.getByLabelText('Urgency')).toBeInTheDocument()
     expect(screen.queryByLabelText('Business justification')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Send to RevenuePoint' })).toBeInTheDocument()
   })
 
-  it('shows impact + urgency only for "Something\'s broken"', async () => {
+  it('offers impact + urgency on every record type', async () => {
     const user = userEvent.setup()
     renderCreate()
 
-    await user.click(screen.getByRole('radio', { name: /Something.s broken/ }))
-
-    const impact = await screen.findByLabelText('Impact')
-    expect(impact).toBeInTheDocument()
-    expect(screen.getByLabelText('Urgency')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Business justification')).not.toBeInTheDocument()
-
-    // Exact contract values
+    // Present on the default (support) type with the exact contract values.
     for (const option of ['Extensive / Widespread', 'Significant / Large', 'Moderate / Limited', 'Minor / Localized']) {
       expect(screen.getByRole('option', { name: option })).toBeInTheDocument()
     }
     for (const option of ['Critical', 'High', 'Medium', 'Low', 'Lowest']) {
       expect(screen.getByRole('option', { name: option })).toBeInTheDocument()
     }
-    // Optional — helper copy present
     expect(screen.getByText(/Optional — your best guess helps us triage/)).toBeInTheDocument()
-  })
 
-  it('shows business justification only for change requests', async () => {
-    const user = userEvent.setup()
-    renderCreate()
-
+    // Still present alongside the change-only justification field.
     await user.click(screen.getByRole('radio', { name: /Change or new feature/ }))
-
     expect(await screen.findByLabelText('Business justification')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Impact')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Urgency')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Impact')).toBeInTheDocument()
+    expect(screen.getByLabelText('Urgency')).toBeInTheDocument()
   })
 
   it('validates subject and description before sending', async () => {
@@ -103,6 +90,62 @@ describe('CaseCreatePage', () => {
     expect(screen.getByRole('button', { name: 'Remove log-1.txt' })).toBeInTheDocument()
   })
 
+  it('autosaves a draft and restores it on return', async () => {
+    const user = userEvent.setup()
+    const first = renderCreate()
+    await user.type(screen.getByLabelText('Subject'), 'Half-written case')
+    first.unmount()
+
+    renderCreate()
+    expect(screen.getByLabelText('Subject')).toHaveValue('Half-written case')
+    expect(screen.getByText(/Picked up where you left off/)).toBeInTheDocument()
+  })
+
+  it('start fresh clears the restored draft', async () => {
+    window.sessionStorage.setItem(
+      'rp:workspace:case-draft',
+      JSON.stringify({
+        recordType: 'support',
+        subject: 'Old draft',
+        description: '',
+        impact: '',
+        urgency: '',
+        businessJustification: '',
+      }),
+    )
+    const user = userEvent.setup()
+    renderCreate()
+    expect(screen.getByLabelText('Subject')).toHaveValue('Old draft')
+
+    await user.click(screen.getByRole('button', { name: 'Start fresh' }))
+
+    expect(screen.getByLabelText('Subject')).toHaveValue('')
+    expect(screen.queryByText(/Picked up where you left off/)).not.toBeInTheDocument()
+  })
+
+  it('cancel without files leaves immediately with the draft retained', async () => {
+    const user = userEvent.setup()
+    renderCreate()
+    await user.type(screen.getByLabelText('Subject'), 'Keep me')
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.getByText('stub:/cases')).toBeInTheDocument()
+    expect(window.sessionStorage.getItem('rp:workspace:case-draft')).toContain('Keep me')
+  })
+
+  it('confirms before leaving when files are attached', async () => {
+    const user = userEvent.setup()
+    renderCreate()
+    fireEvent.change(dropInput(), { target: { files: [fileOf('notes.txt')] } })
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByText(/Attached files aren.t saved with drafts/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Keep writing' }))
+    expect(screen.queryByText(/Attached files aren.t saved with drafts/)).not.toBeInTheDocument()
+  })
+
   it('renders the form for impersonated (acting) sessions', () => {
     seedImpersonatedSession()
     renderWithProviders(<CaseCreatePage />, { route: '/cases/new', path: '/cases/new' })
@@ -128,5 +171,7 @@ describe('CaseCreatePage', () => {
     expect(screen.getByRole('heading', { name: /#\d{8}/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'View case' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to cases' })).toBeInTheDocument()
+    // A sent case never leaves a stale draft behind.
+    expect(window.sessionStorage.getItem('rp:workspace:case-draft')).toBeNull()
   })
 })

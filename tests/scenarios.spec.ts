@@ -63,6 +63,19 @@ test('an expired session lands on login with an explanation', async ({ page }) =
   ).toBeVisible()
 })
 
+test('a case draft survives navigating away', async ({ page }) => {
+  await page.goto('/login/callback?token=e2e-draft')
+  await page.getByRole('link', { name: 'Create a case' }).click()
+  await page.getByLabel('Subject').fill('Draft in progress')
+
+  // Breadcrumb away, then come back.
+  await page.getByRole('link', { name: 'Cases', exact: true }).click()
+  await page.getByRole('link', { name: 'Create a case' }).click()
+
+  await expect(page.getByLabel('Subject')).toHaveValue('Draft in progress')
+  await expect(page.getByText(/Picked up where you left off/)).toBeVisible()
+})
+
 test('impersonation sessions act with attribution', async ({ page }) => {
   await page.goto('/login/callback?token=impersonate-token')
 
@@ -80,7 +93,8 @@ test('impersonation sessions act with attribution', async ({ page }) => {
   await page.getByLabel('Add a comment').fill('Filed the workaround for you.')
   await page.getByRole('button', { name: 'Add comment' }).click()
   await expect(page.getByText('Filed the workaround for you.')).toBeVisible()
-  await expect(page.getByText('Devon Staff')).toBeVisible()
+  // exact: the banner also contains the actor's name as a substring.
+  await expect(page.getByText('Devon Staff', { exact: true })).toBeVisible()
 
   // The create form is reachable while acting, too.
   await page.goto('/cases/new')
