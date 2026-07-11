@@ -53,6 +53,13 @@ function isAuthorized(request: Request): boolean {
   return token.length > 0 && token !== 'expired-session-jwt'
 }
 
+const SEED_CONTACT_NAME = `${seedContact.firstName} ${seedContact.lastName}`
+
+/** Mock "mine" = the case's submitter is the seed contact (the real API keys on ContactId). */
+function isMine(c: CaseDetail): boolean {
+  return c.submittedBy?.name === SEED_CONTACT_NAME
+}
+
 function toSummary(c: CaseDetail): CaseSummary {
   return {
     id: c.id,
@@ -67,6 +74,7 @@ function toSummary(c: CaseDetail): CaseSummary {
     createdAt: c.createdAt,
     lastActivityAt: c.lastActivityAt,
     submittedBy: c.submittedBy,
+    mine: isMine(c),
   }
 }
 
@@ -156,6 +164,11 @@ export const handlers = [
       open: db.filter((c) => c.statusGroup === 'open').length,
       closed: db.filter((c) => c.statusGroup === 'closed').length,
     }
+    const mine = db.filter(isMine)
+    const mineCounts = {
+      open: mine.filter((c) => c.statusGroup === 'open').length,
+      closed: mine.filter((c) => c.statusGroup === 'closed').length,
+    }
     const cases =
       status === 'all' ? db : db.filter((c) => c.statusGroup === (status as StatusGroup))
 
@@ -164,6 +177,7 @@ export const handlers = [
         .map(toSummary)
         .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt)),
       counts,
+      mineCounts,
     }
     return HttpResponse.json(body)
   }),

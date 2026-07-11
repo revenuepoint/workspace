@@ -64,12 +64,16 @@ export interface CaseSummary {
   createdAt: string
   lastActivityAt: string
   submittedBy: { name: string } | null
+  /** True when the signed-in contact is the case's primary contact ("mine"). */
+  mine?: boolean
 }
 
 /** GET /v1/client/cases?status=open|closed|all — 200. */
 export interface CasesListResponse {
   cases: CaseSummary[]
   counts: { open: number; closed: number }
+  /** Counts restricted to the signed-in contact's own cases (the default view). */
+  mineCounts?: { open: number; closed: number }
 }
 
 export type TimelineKind = 'comment' | 'email' | 'status' | 'file' | 'created'

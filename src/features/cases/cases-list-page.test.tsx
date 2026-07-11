@@ -12,24 +12,36 @@ function renderList() {
 }
 
 describe('CasesListPage', () => {
-  it('renders the account header, fixture rows, and counts', async () => {
+  it('defaults to the signed-in contact’s own cases with scoped counts', async () => {
     renderList()
 
     expect(await screen.findByRole('heading', { name: 'Acme Corp · Cases' })).toBeInTheDocument()
-    expect(await screen.findByText('00012341')).toBeInTheDocument()
-    expect(screen.getByText('Quarterly invoice shows duplicate line items')).toBeInTheDocument()
+    // Dana's own open case shows…
+    expect(await screen.findByText('Quarterly invoice shows duplicate line items')).toBeInTheDocument()
+    // …a colleague's case (Marcus Feld) does NOT, in the default "My cases" view.
+    expect(screen.queryByText('Payment webhook retries failing since Friday')).not.toBeInTheDocument()
 
-    // Filter pills with counts
-    expect(screen.getByRole('button', { name: /Open \(6\)/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Closed \(4\)/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /All \(10\)/ })).toBeInTheDocument()
+    // "My cases" scope active; status pills show Dana's counts (4 open / 3 closed).
+    expect(screen.getByRole('button', { name: /My cases/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /Open \(4\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Closed \(3\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /All \(7\)/ })).toBeInTheDocument()
 
-    // Closed cases stay off the default (open) view
-    expect(screen.queryByText('00012337')).not.toBeInTheDocument()
-
-    // Proper table semantics
     expect(screen.getByRole('columnheader', { name: /Case #/ })).toBeInTheDocument()
-    expect(screen.getByRole('columnheader', { name: /Last activity/ })).toBeInTheDocument()
+  })
+
+  it('reveals colleagues’ cases when switched to "All cases"', async () => {
+    const user = userEvent.setup()
+    renderList()
+    await screen.findByText('Quarterly invoice shows duplicate line items')
+
+    await user.click(screen.getByRole('button', { name: /All cases/ }))
+
+    // Marcus Feld's case now appears; counts jump to the account-wide totals.
+    expect(await screen.findByText('Payment webhook retries failing since Friday')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Open \(6\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /All \(10\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /All cases/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('pins waiting-on-you cases to the top and announces the count', async () => {
@@ -75,12 +87,30 @@ describe('CasesListPage', () => {
     const user = userEvent.setup()
     renderList()
 
-    await user.click(await screen.findByRole('button', { name: /Closed \(4\)/ }))
+    // Default "My cases" → 3 of Dana's cases are closed.
+    await user.click(await screen.findByRole('button', { name: /Closed \(3\)/ }))
 
-    expect(await screen.findByText('00012337')).toBeInTheDocument()
-    expect(screen.getByText('Reset MFA for the finance team lead')).toBeInTheDocument()
-    expect(screen.queryByText('00012341')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Closed \(4\)/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText('Reset MFA for the finance team lead')).toBeInTheDocument()
+    expect(screen.queryByText('Quarterly invoice shows duplicate line items')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Closed \(3\)/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('offers "see all cases" when the contact has none of their own', async () => {
+    server.use(
+      http.get('*/v1/client/cases', () =>
+        HttpResponse.json({
+          cases: [],
+          counts: { open: 5, closed: 2 },
+          mineCounts: { open: 0, closed: 0 },
+        }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderList()
+
+    expect(await screen.findByText(/You don.t have any cases yet/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /See all cases at your account/ }))
+    expect(screen.getByRole('button', { name: /All cases/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('shows the no-open-cases empty state with a create link', async () => {

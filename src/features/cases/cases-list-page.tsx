@@ -25,8 +25,15 @@ const SORT_ACCESSORS: Record<SortKey, (c: CaseSummary) => string> = {
 
 const FILTERS: CaseListFilter[] = ['open', 'closed', 'all']
 
+/** Whose cases: the signed-in contact's own ("mine", default) or everyone's. */
+type Scope = 'mine' | 'all'
+
 function parseFilter(raw: string | null): CaseListFilter {
   return raw === 'closed' || raw === 'all' ? raw : 'open'
+}
+
+function parseScope(raw: string | null): Scope {
+  return raw === 'all' ? 'all' : 'mine'
 }
 
 export function CasesListPage() {
@@ -34,6 +41,7 @@ export function CasesListPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const filter = parseFilter(searchParams.get('status'))
+  const scope = parseScope(searchParams.get('scope'))
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: 'lastActivity', dir: 'desc' })
 
   const { data, isPending, isError, refetch } = useQuery({
@@ -46,23 +54,31 @@ export function CasesListPage() {
     if (!data) return []
     const accessor = SORT_ACCESSORS[sort.key]
     const factor = sort.dir === 'asc' ? 1 : -1
-    return [...data.cases].sort((a, b) => {
+    const inScope = scope === 'mine' ? data.cases.filter((c) => c.mine) : data.cases
+    return [...inScope].sort((a, b) => {
       // Your-move cases surface first, whatever the sort.
       if (a.waitingOnYou !== b.waitingOnYou) return a.waitingOnYou ? -1 : 1
       return accessor(a).localeCompare(accessor(b)) * factor
     })
-  }, [data, sort])
+  }, [data, sort, scope])
 
-  const waitingCount = useMemo(
-    () => (data?.cases ?? []).filter((c) => c.waitingOnYou).length,
-    [data],
-  )
+  const waitingCount = useMemo(() => sorted.filter((c) => c.waitingOnYou).length, [sorted])
 
   // Below md the 5-column table can't breathe — swap to stacked cards.
   const narrow = useMediaQuery('(max-width: 767px)')
 
   function setFilter(next: CaseListFilter) {
-    setSearchParams(next === 'open' ? {} : { status: next }, { replace: true })
+    const params = new URLSearchParams(searchParams)
+    if (next === 'open') params.delete('status')
+    else params.set('status', next)
+    setSearchParams(params, { replace: true })
+  }
+
+  function setScope(next: Scope) {
+    const params = new URLSearchParams(searchParams)
+    if (next === 'mine') params.delete('scope')
+    else params.set('scope', next)
+    setSearchParams(params, { replace: true })
   }
 
   function toggleSort(key: SortKey) {
@@ -73,13 +89,17 @@ export function CasesListPage() {
     )
   }
 
-  const counts = data?.counts
+  // Pill counts follow the scope: "My cases" uses mineCounts, "All" uses the
+  // account-wide counts (falls back to counts if the API predates mineCounts).
+  const counts = scope === 'mine' ? (data?.mineCounts ?? data?.counts) : data?.counts
   const filterLabel = (f: CaseListFilter): string => {
     if (!counts) return f === 'open' ? 'Open' : f === 'closed' ? 'Closed' : 'All'
     if (f === 'open') return `Open (${counts.open})`
     if (f === 'closed') return `Closed (${counts.closed})`
     return `All (${counts.open + counts.closed})`
   }
+  const mineTotal = data?.mineCounts ? data.mineCounts.open + data.mineCounts.closed : undefined
+  const allTotal = data?.counts ? data.counts.open + data.counts.closed : undefined
 
   return (
     <div>
@@ -98,8 +118,41 @@ export function CasesListPage() {
         </Button>
       </div>
 
-      {/* Filter pills */}
-      <div role="group" aria-label="Filter cases" className="mt-8 flex flex-wrap gap-2">
+      {/* Scope — the signed-in person's own cases (default) vs the whole account */}
+      <div
+        role="group"
+        aria-label="Whose cases"
+        className="mt-8 inline-flex rounded-lg border border-rule/80 bg-paper p-0.5"
+      >
+        {(
+          [
+            ['mine', 'My cases', mineTotal],
+            ['all', 'All cases', allTotal],
+          ] as const
+        ).map(([value, label, total]) => {
+          const active = scope === value
+          return (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setScope(value)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-[7px] px-3.5 py-1.5 text-sm font-semibold transition-colors duration-[180ms] ease-editorial',
+                active ? 'bg-card text-ink shadow-editorial' : 'text-mute hover:text-inkMid',
+              )}
+            >
+              {label}
+              {total !== undefined ? (
+                <span className="font-mono text-[0.6875rem] text-mute">{total}</span>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Status filter pills */}
+      <div role="group" aria-label="Filter cases" className="mt-4 flex flex-wrap gap-2">
         {FILTERS.map((f) => {
           const active = filter === f
           return (
@@ -155,7 +208,13 @@ export function CasesListPage() {
             </Button>
           </div>
         ) : sorted.length === 0 ? (
-          <EmptyState filter={filter} counts={counts ?? { open: 0, closed: 0 }} />
+          <EmptyState
+            filter={filter}
+            scope={scope}
+            counts={counts ?? { open: 0, closed: 0 }}
+            accountHasCases={(allTotal ?? 0) > 0}
+            onSeeAll={() => setScope('all')}
+          />
         ) : narrow ? (
           <CasesCards cases={sorted} />
         ) : (
@@ -166,12 +225,50 @@ export function CasesListPage() {
   )
 }
 
-function EmptyState({ filter, counts }: { filter: CaseListFilter; counts: { open: number; closed: number } }) {
-  const nothingAtAll = counts.open + counts.closed === 0
+function EmptyState({
+  filter,
+  scope,
+  counts,
+  accountHasCases,
+  onSeeAll,
+}: {
+  filter: CaseListFilter
+  scope: Scope
+  counts: { open: number; closed: number }
+  accountHasCases: boolean
+  onSeeAll: () => void
+}) {
+  const nothingInScope = counts.open + counts.closed === 0
+
+  // "My cases" is empty but the account has cases elsewhere → point them to All.
+  if (scope === 'mine' && nothingInScope && accountHasCases) {
+    return (
+      <div className="border-t border-rule/50 py-20 text-center">
+        <p className="mx-auto max-w-sm text-[0.9375rem] leading-relaxed text-inkMid">
+          You don&rsquo;t have any cases yet.{' '}
+          <button
+            type="button"
+            onClick={onSeeAll}
+            className="rounded-sm font-semibold text-crimson underline-offset-4 hover:underline"
+          >
+            See all cases at your account
+          </button>
+          , or{' '}
+          <Link
+            to="/cases/new"
+            className="rounded-sm font-semibold text-crimson underline-offset-4 hover:underline"
+          >
+            create one
+          </Link>
+          .
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="border-t border-rule/50 py-20 text-center">
-      {nothingAtAll ? (
+      {nothingInScope ? (
         <p className="mx-auto max-w-sm text-[0.9375rem] leading-relaxed text-inkMid">
           Nothing here yet. When your team creates a case, it&rsquo;ll show up here.
         </p>

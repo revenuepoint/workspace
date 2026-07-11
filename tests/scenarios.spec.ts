@@ -26,6 +26,8 @@ test('narrow screens get tappable cards instead of the table', async ({ page }) 
 
 test('marking a case resolved posts the structured note', async ({ page }) => {
   await page.goto('/login/callback?token=e2e-resolve')
+  // This case belongs to a colleague — switch to "All cases" to reach it.
+  await page.getByRole('button', { name: /All cases/ }).click()
   await page.getByRole('link', { name: 'Payment webhook retries failing since Friday' }).click()
   await expect(page.getByRole('heading', { name: /Payment webhook retries/ })).toBeVisible()
 
@@ -74,6 +76,20 @@ test('a case draft survives navigating away', async ({ page }) => {
 
   await expect(page.getByLabel('Subject')).toHaveValue('Draft in progress')
   await expect(page.getByText(/Picked up where you left off/)).toBeVisible()
+})
+
+test('the case list defaults to "My cases" and can show all', async ({ page }) => {
+  await page.goto('/login/callback?token=e2e-scope')
+  await expect(page.getByRole('heading', { name: 'Acme Corp · Cases' })).toBeVisible()
+
+  // Default: only the signed-in contact's own cases; a colleague's is hidden.
+  await expect(page.getByRole('button', { name: /My cases/ })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText('Quarterly invoice shows duplicate line items')).toBeVisible()
+  await expect(page.getByText('Payment webhook retries failing since Friday')).toBeHidden()
+
+  // All cases reveals everyone's.
+  await page.getByRole('button', { name: /All cases/ }).click()
+  await expect(page.getByText('Payment webhook retries failing since Friday')).toBeVisible()
 })
 
 test('an email deep-link signs in and lands on the case', async ({ page }) => {
