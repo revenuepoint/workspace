@@ -131,8 +131,15 @@ export function seedCases(): CaseDetail[] {
       lastModifiedAt: ago(3),
       submittedBy: { name: 'Dana Whitfield' },
       owner: { name: 'Priya Raman', isQueue: false },
+      urgency: 'High',
+      priority: '4. High',
       description:
-        'The Q1 invoice export (run March 31) shows several line items twice — same SKU, same amount, same timestamp. It only seems to affect customers where we issued a credit memo during the quarter. Totals are off by the duplicated amounts, which blocks our reconciliation.',
+        'The Q1 invoice export (run March 31) shows several line items **twice** — same SKU, same amount, same timestamp.\n\n' +
+        'It only seems to affect customers where we issued a credit memo during the quarter. What we see:\n\n' +
+        '- Duplicated rows inflate the invoice total\n' +
+        '- Only Q1 (Jan–Mar) exports are affected\n' +
+        '- Re-running the export reproduces it every time\n\n' +
+        'This blocks our reconciliation — the totals no longer tie out to the ledger. Happy to share a sample export on request.',
       timeline: structuredClone(case1Timeline),
       files: structuredClone(case1Files),
     },
@@ -151,6 +158,8 @@ export function seedCases(): CaseDetail[] {
       lastModifiedAt: ago(1, 3),
       submittedBy: { name: COLLEAGUE },
       owner: { name: 'Tomás Ibarra', isQueue: false },
+      urgency: 'Critical',
+      priority: '5. Blocker',
       description:
         'Since Friday around 14:00 UTC our payment webhooks return 502 on retry. First delivery succeeds maybe half the time; retries never do. Our reconciliation job depends on these, so we’re currently patching records by hand every morning.',
       timeline: [
@@ -274,6 +283,8 @@ export function seedCases(): CaseDetail[] {
       lastModifiedAt: ago(0, 22),
       submittedBy: { name: COLLEAGUE },
       owner: { name: 'Tomás Ibarra', isQueue: false },
+      urgency: 'Medium',
+      priority: '3. Medium',
       description:
         'Team members in Frankfurt and Singapore see daily revenue totals shifted by one day relative to the ledger. Looks like the dashboard buckets by UTC while the ledger uses the account timezone. US-based users see correct numbers.',
       timeline: [

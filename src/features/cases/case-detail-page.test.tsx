@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders, seedImpersonatedSession, seedSession } from '@/test/test-utils'
 import { CaseDetailPage } from './case-detail-page'
@@ -75,6 +75,38 @@ describe('CaseDetailPage', () => {
       screen.getByRole('button', { name: /Download duplicate-lines-annotated\.pdf/ }),
     ).toBeInTheDocument()
     expect(screen.getByText('403 KB')).toBeInTheDocument()
+  })
+
+  it('renders the progress path with the current stage marked', async () => {
+    renderDetail('case-0005') // problem case, status UAT → In testing
+    await screen.findByRole('heading', { name: /Dashboard totals off/ })
+
+    const path = screen.getByRole('navigation', { name: 'Case progress' })
+    expect(path).toBeInTheDocument()
+    // Full 5-step path for a problem case.
+    for (const label of ['Received', 'In review', 'In progress', 'In testing', 'Deployed']) {
+      expect(within(path).getByText(label)).toBeInTheDocument()
+    }
+    expect(within(path).getByText('(current stage)')).toBeInTheDocument()
+  })
+
+  it('shows urgency and clean-labelled priority', async () => {
+    renderDetail('case-0002') // Critical / 5. Blocker
+    await screen.findByRole('heading', { name: /Payment webhook retries/ })
+
+    expect(screen.getByText('Critical')).toBeInTheDocument()
+    expect(screen.getByText('Blocker')).toBeInTheDocument() // ordinal stripped
+    expect(screen.queryByText('5. Blocker')).not.toBeInTheDocument()
+  })
+
+  it('renders the description as Markdown', async () => {
+    renderDetail('case-0001')
+    await screen.findByRole('heading', { name: /Quarterly invoice/ })
+
+    // **twice** → <strong>, the "- " lines → list items.
+    const strong = screen.getByText('twice')
+    expect(strong.tagName).toBe('STRONG')
+    expect(screen.getByText('Duplicated rows inflate the invoice total')).toBeInTheDocument()
   })
 
   it('shows who has the case when it is with a person, not a queue', async () => {

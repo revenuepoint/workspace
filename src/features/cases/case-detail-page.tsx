@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleCheck, TriangleAlert } from 'lucide-react'
@@ -6,9 +6,12 @@ import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
 import type { CaseDetail } from '@/lib/api-types'
 import { formatDate, relativeTime } from '@/lib/format'
+import { priorityLabelFor } from '@/lib/priority'
+import { renderMarkdown } from '@/lib/sanitize'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { StatusChip } from '@/components/ui/status-chip'
+import { CasePath } from './case-path'
 import { CommentComposer } from './comment-composer'
 import { FileChip } from './file-chip'
 import { Timeline } from './timeline'
@@ -101,6 +104,22 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
             {relativeTime(detail.lastModifiedAt)}
           </time>
         </span>
+        {detail.urgency ? (
+          <>
+            <MetaDot />
+            <span>
+              Urgency <span className="text-inkMid">{detail.urgency}</span>
+            </span>
+          </>
+        ) : null}
+        {priorityLabelFor(detail.priority) ? (
+          <>
+            <MetaDot />
+            <span>
+              Priority <span className="text-inkMid">{priorityLabelFor(detail.priority)}</span>
+            </span>
+          </>
+        ) : null}
         {!detail.owner.isQueue ? (
           <>
             <MetaDot />
@@ -114,6 +133,8 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
           </>
         ) : null}
       </div>
+
+      <CasePath status={detail.status} recordType={detail.recordType} />
 
       {detail.waitingOnYou ? (
         <div
@@ -131,14 +152,12 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
         </div>
       ) : null}
 
-      {/* Description */}
+      {/* Description — client-authored Markdown, sanitized before render. */}
       <section aria-labelledby="case-description-heading" className="mt-8">
         <h2 id="case-description-heading" className="micro-label">
           Description
         </h2>
-        <p className="mt-2.5 max-w-prose whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-inkSoft">
-          {detail.description}
-        </p>
+        <CaseDescription markdown={detail.description} />
       </section>
 
       {/* Files */}
@@ -249,5 +268,16 @@ function MetaDot() {
     <span aria-hidden="true" className="text-muteSoft">
       ·
     </span>
+  )
+}
+
+function CaseDescription({ markdown }: { markdown: string }) {
+  const html = useMemo(() => renderMarkdown(markdown), [markdown])
+  return (
+    <div
+      className="rich-text mt-2.5 max-w-prose text-[0.9375rem] leading-relaxed text-inkSoft"
+      // Rendered from Markdown and sanitized in renderMarkdown (DOMPurify).
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   )
 }

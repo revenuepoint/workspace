@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeEmailHtml } from '@/lib/sanitize'
+import { renderMarkdown, sanitizeEmailHtml } from '@/lib/sanitize'
 
 describe('sanitizeEmailHtml', () => {
   it('strips scripts and event handlers', () => {
@@ -30,5 +30,30 @@ describe('sanitizeEmailHtml', () => {
     expect(clean).toContain('<ul>')
     expect(clean).toContain('<strong>')
     expect(clean).toContain('<blockquote>')
+  })
+})
+
+describe('renderMarkdown', () => {
+  it('renders common Markdown to HTML', () => {
+    const html = renderMarkdown('This is **bold** and a list:\n\n- one\n- two')
+    expect(html).toContain('<strong>bold</strong>')
+    expect(html).toContain('<li>one</li>')
+    expect(html).toContain('<li>two</li>')
+  })
+
+  it('turns a single newline into a line break', () => {
+    expect(renderMarkdown('line one\nline two')).toContain('<br>')
+  })
+
+  it('sanitizes embedded HTML and dangerous links', () => {
+    const html = renderMarkdown('normal <script>alert(1)</script> [x](javascript:alert(1))')
+    expect(html).not.toContain('<script')
+    expect(html).not.toContain('javascript:')
+  })
+
+  it('hardens rendered links to open safely in a new tab', () => {
+    const html = renderMarkdown('[docs](https://example.com)')
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain('rel="noopener noreferrer"')
   })
 })

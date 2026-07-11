@@ -82,3 +82,77 @@ const CHIP_CLASSES: Record<StatusKey, string> = {
 export function statusChipClassesFor(rawStatus: string): string {
   return CHIP_CLASSES[statusKeyFor(rawStatus)]
 }
+
+// ---------------------------------------------------------------------------
+// Case path — the ordered stages a case moves through, for the detail stepper.
+// Support cases skip the dev pipeline; problem/change run the full length.
+// Pauses (waiting-on-you/vendor, on hold) replace the raw status in Salesforce
+// so the underlying stage is unknown — they render as a paused "In progress".
+// ---------------------------------------------------------------------------
+
+export type PathStageKey = 'received' | 'inReview' | 'inProgress' | 'inTesting' | 'shipped'
+
+interface PathStage {
+  key: PathStageKey
+  label: string
+}
+
+const FULL_PATH: PathStage[] = [
+  { key: 'received', label: 'Received' },
+  { key: 'inReview', label: 'In review' },
+  { key: 'inProgress', label: 'In progress' },
+  { key: 'inTesting', label: 'In testing' },
+  { key: 'shipped', label: 'Deployed' },
+]
+
+const SUPPORT_PATH: PathStage[] = [
+  { key: 'received', label: 'Received' },
+  { key: 'inReview', label: 'In review' },
+  { key: 'inProgress', label: 'In progress' },
+  { key: 'shipped', label: 'Resolved' },
+]
+
+/** Which status keys land on which stage index within a path (see resolver). */
+const STAGE_FOR_STATUS: Partial<Record<StatusKey, PathStageKey>> = {
+  received: 'received',
+  inReview: 'inReview',
+  inProgress: 'inProgress',
+  inTesting: 'inTesting',
+  deployed: 'shipped',
+  closed: 'shipped',
+}
+
+export interface CasePathState {
+  stages: PathStage[]
+  /** Index of the case's current stage within `stages`. */
+  currentIndex: number
+  /** Paused cases sit on their current stage but can't advance. */
+  paused: 'you' | 'vendor' | 'hold' | null
+  /** Closed/deployed — the whole path is behind the case. */
+  done: boolean
+}
+
+/**
+ * Resolve the stepper state for a case. Returns null for statuses with no
+ * meaningful place on the path (unknown), so the caller can omit the stepper.
+ */
+export function casePathFor(rawStatus: string, recordType: string): CasePathState | null {
+  const key = statusKeyFor(rawStatus)
+  if (key === 'unknown') return null
+
+  const stages = recordType === 'support' || recordType === 'other' ? SUPPORT_PATH : FULL_PATH
+
+  const paused: CasePathState['paused'] =
+    key === 'waitingOnYou' ? 'you' : key === 'waitingOnVendor' ? 'vendor' : key === 'onHold' ? 'hold' : null
+
+  // Pauses replace the underlying stage — they almost always happen mid-flight,
+  // so anchor them to "In progress" rather than inventing a stage.
+  const stageKey: PathStageKey = paused ? 'inProgress' : (STAGE_FOR_STATUS[key] ?? 'received')
+
+  let currentIndex = stages.findIndex((s) => s.key === stageKey)
+  // A pipeline-only stage (e.g. inTesting) on a support case falls back to the
+  // last available step so the stepper never points past its own end.
+  if (currentIndex === -1) currentIndex = stages.length - 1
+
+  return { stages, currentIndex, paused, done: key === 'closed' || key === 'deployed' }
+}

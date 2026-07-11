@@ -30,6 +30,10 @@ test('login → list → case detail → comment → create case', async ({ page
   // --- case detail ---------------------------------------------------------
   await page.getByRole('link', { name: 'Quarterly invoice shows duplicate line items' }).click()
   await expect(page.getByRole('heading', { name: 'Quarterly invoice shows duplicate line items' })).toBeVisible()
+  // Progress path + urgency/priority readout on the detail header.
+  await expect(page.getByRole('navigation', { name: 'Case progress' })).toBeVisible()
+  await expect(page.getByText(/Urgency/)).toBeVisible()
+  await expect(page.getByText(/Priority/)).toBeVisible()
   await expect(page.getByText('Received → In review')).toBeVisible()
   await expect(page.getByText('Re: Quarterly invoice shows duplicate line items [ref:00012341]')).toBeVisible()
 
@@ -65,5 +69,8 @@ test('login → list → case detail → comment → create case', async ({ page
   expect(caseNumber).toMatch(/#\d{8}/)
   await page.getByRole('link', { name: 'View case' }).click()
   await expect(page.getByRole('heading', { name: 'Ledger export hangs at 99%' })).toBeVisible()
-  await expect(page.getByText('Received', { exact: true })).toBeVisible()
+  // "Received" now appears in both the status chip and the progress path's
+  // first stage — the chip is the one this assertion cares about.
+  await expect(page.getByText('Received', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Case progress' })).toBeVisible()
 })

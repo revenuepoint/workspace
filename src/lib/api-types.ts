@@ -100,6 +100,9 @@ export interface CaseDetail extends CaseSummary {
   description: string
   lastModifiedAt: string
   owner: { name: string; isQueue: boolean }
+  /** Raw SF values; the SPA maps them to client-facing labels. Null when blank. */
+  urgency?: string | null
+  priority?: string | null
   timeline: TimelineEntry[]
   files: FileMeta[]
 }
