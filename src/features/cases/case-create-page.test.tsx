@@ -103,12 +103,11 @@ describe('CaseCreatePage', () => {
     expect(screen.getByRole('button', { name: 'Remove log-1.txt' })).toBeInTheDocument()
   })
 
-  it('redirects impersonated (read-only) sessions back to the list', () => {
+  it('renders the form for impersonated (acting) sessions', () => {
     seedImpersonatedSession()
     renderWithProviders(<CaseCreatePage />, { route: '/cases/new', path: '/cases/new' })
 
-    expect(screen.getByText('stub:/cases')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Create a case' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Create a case' })).toBeInTheDocument()
   })
 
   it('submits a problem case and lands on the success screen with the case number', async () => {

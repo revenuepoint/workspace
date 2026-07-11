@@ -90,14 +90,12 @@ export function CasesListPage() {
           </h1>
           <p className="mt-1.5 text-sm text-mute">Everything you&rsquo;ve sent us, and where it stands.</p>
         </div>
-        {contact?.impersonated ? null : (
-          <Button asChild>
-            <Link to="/cases/new">
-              <Plus aria-hidden="true" />
-              Create a case
-            </Link>
-          </Button>
-        )}
+        <Button asChild>
+          <Link to="/cases/new">
+            <Plus aria-hidden="true" />
+            Create a case
+          </Link>
+        </Button>
       </div>
 
       {/* Filter pills */}
@@ -170,7 +168,6 @@ export function CasesListPage() {
 
 function EmptyState({ filter, counts }: { filter: CaseListFilter; counts: { open: number; closed: number } }) {
   const nothingAtAll = counts.open + counts.closed === 0
-  const impersonated = useSessionStore((s) => s.contact?.impersonated === true)
 
   return (
     <div className="border-t border-rule/50 py-20 text-center">
@@ -178,7 +175,7 @@ function EmptyState({ filter, counts }: { filter: CaseListFilter; counts: { open
         <p className="mx-auto max-w-sm text-[0.9375rem] leading-relaxed text-inkMid">
           Nothing here yet. When your team creates a case, it&rsquo;ll show up here.
         </p>
-      ) : filter === 'open' && !impersonated ? (
+      ) : filter === 'open' ? (
         <p className="mx-auto max-w-sm text-[0.9375rem] leading-relaxed text-inkMid">
           No open cases. Need to start one?{' '}
           <Link
@@ -188,10 +185,6 @@ function EmptyState({ filter, counts }: { filter: CaseListFilter; counts: { open
             Create a case
           </Link>
           .
-        </p>
-      ) : filter === 'open' ? (
-        <p className="mx-auto max-w-sm text-[0.9375rem] leading-relaxed text-inkMid">
-          No open cases.
         </p>
       ) : (
         <p className="mx-auto max-w-sm text-[0.9375rem] leading-relaxed text-inkMid">

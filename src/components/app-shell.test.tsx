@@ -11,15 +11,15 @@ describe('AppShell', () => {
     renderWithProviders(<AppShell />, { route: '/cases', path: '/cases' })
 
     expect(screen.getByText('Acme Corp')).toBeInTheDocument()
-    expect(screen.queryByText(/read-only/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Acting as/)).not.toBeInTheDocument()
   })
 
-  it('shows the read-only banner on impersonated sessions', () => {
+  it('shows the acting-as banner on impersonated sessions', () => {
     seedImpersonatedSession()
     renderWithProviders(<AppShell />, { route: '/cases', path: '/cases' })
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Viewing as Dana Whitfield (Acme Corp) — read-only',
+      'Acting as Dana Whitfield (Acme Corp) — you are Devon Staff; actions are recorded as RevenuePoint',
     )
   })
 

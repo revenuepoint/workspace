@@ -136,12 +136,12 @@ describe('CaseDetailPage', () => {
     expect(screen.getByText(/No activity yet/)).toBeInTheDocument()
   })
 
-  it('hides the composer for impersonated (read-only) sessions', async () => {
+  it('keeps the composer for impersonated (acting) sessions', async () => {
     seedImpersonatedSession()
     renderWithProviders(<CaseDetailPage />, { route: '/cases/case-0001', path: '/cases/:id' })
 
     await screen.findByRole('heading', { name: /Quarterly invoice/ })
-    expect(screen.queryByLabelText('Add a comment')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Add a comment')).toBeInTheDocument()
   })
 
   it('shows the not-found state for a case outside this account', async () => {

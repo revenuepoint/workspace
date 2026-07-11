@@ -14,8 +14,10 @@ export interface Contact {
   email: string
   accountId: string
   accountName: string
-  /** Present (true) on staff impersonation sessions — the API rejects writes. */
+  /** Present (true) on staff impersonation sessions — writes are attributed to the actor. */
   impersonated?: boolean
+  /** Impersonation actor display name (the staff member acting). */
+  actorName?: string
 }
 
 /** POST /v1/client/auth/start — always 200 (no account enumeration). */

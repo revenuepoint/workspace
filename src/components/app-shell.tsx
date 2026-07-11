@@ -49,9 +49,13 @@ export function AppShell() {
       </header>
 
       {contact?.impersonated ? (
-        <div role="status" className="border-b border-amber/30 bg-amber/10">
-          <p className="mx-auto w-full max-w-5xl px-6 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-amber">
-            Viewing as {contact.firstName} {contact.lastName} ({contact.accountName}) — read-only
+        // Crimson, not amber — amber is reserved for waiting-on-you. This is
+        // the "you are in a powerful mode" stripe: writes work and are
+        // attributed to the actor.
+        <div role="status" className="border-b border-crimson/30 bg-crimsonTint/50">
+          <p className="mx-auto w-full max-w-5xl px-6 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-crimsonDeep">
+            Acting as {contact.firstName} {contact.lastName} ({contact.accountName}) — you are{' '}
+            {contact.actorName ?? 'RevenuePoint staff'}; actions are recorded as RevenuePoint
           </p>
         </div>
       ) : null}

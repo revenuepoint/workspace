@@ -27,12 +27,21 @@ export function CommentComposer({ caseId }: { caseId: string }) {
     onMutate: async (text) => {
       await queryClient.cancelQueries({ queryKey: detailKey })
       const previous = queryClient.getQueryData<CaseDetail>(detailKey)
+      // Impersonated sessions render their own bubbles RevenuePoint-side
+      // immediately — matching what the server entry will come back as.
+      const impersonated = contact?.impersonated === true
       const optimistic: TimelineEntry = {
         id: `optimistic-${Date.now()}`,
         kind: 'comment',
         at: new Date().toISOString(),
-        side: 'client',
-        author: { name: contact ? `${contact.firstName} ${contact.lastName}` : 'You' },
+        side: impersonated ? 'rp' : 'client',
+        author: {
+          name: impersonated
+            ? (contact.actorName ?? 'RevenuePoint staff')
+            : contact
+              ? `${contact.firstName} ${contact.lastName}`
+              : 'You',
+        },
         bodyText: text,
       }
       queryClient.setQueryData<CaseDetail>(detailKey, (old) =>

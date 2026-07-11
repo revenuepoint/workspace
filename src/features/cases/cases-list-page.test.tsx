@@ -96,12 +96,12 @@ describe('CasesListPage', () => {
     expect(screen.getAllByRole('link', { name: /Create a case/ }).length).toBeGreaterThanOrEqual(2)
   })
 
-  it('hides the create affordances for impersonated (read-only) sessions', async () => {
+  it('keeps the create affordances for impersonated (acting) sessions', async () => {
     seedImpersonatedSession()
     renderWithProviders(<CasesListPage />, { route: '/cases', path: '/cases' })
 
     await screen.findByRole('heading', { name: 'Acme Corp · Cases' })
-    expect(screen.queryByRole('link', { name: /Create a case/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Create a case/ })).toBeInTheDocument()
   })
 
   it('shows the nothing-here-yet empty state when the account has no cases at all', async () => {

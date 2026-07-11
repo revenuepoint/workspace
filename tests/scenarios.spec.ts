@@ -63,19 +63,26 @@ test('an expired session lands on login with an explanation', async ({ page }) =
   ).toBeVisible()
 })
 
-test('impersonation sessions are visibly read-only', async ({ page }) => {
+test('impersonation sessions act with attribution', async ({ page }) => {
   await page.goto('/login/callback?token=impersonate-token')
 
-  await expect(page.getByText('Viewing as Dana Whitfield (Acme Corp) — read-only')).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Create a case' })).toHaveCount(0)
+  await expect(
+    page.getByText(
+      'Acting as Dana Whitfield (Acme Corp) — you are Devon Staff; actions are recorded as RevenuePoint',
+    ),
+  ).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Create a case' })).toBeVisible()
 
   await page.getByRole('link', { name: 'Quarterly invoice shows duplicate line items' }).click()
   await expect(page.getByRole('heading', { name: /Quarterly invoice/ })).toBeVisible()
-  await expect(page.getByLabel('Add a comment')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Mark as resolved' })).toHaveCount(0)
 
-  // Deep-linking the create form redirects straight back to the list.
+  // Comment while acting — lands RevenuePoint-side under the actor's name.
+  await page.getByLabel('Add a comment').fill('Filed the workaround for you.')
+  await page.getByRole('button', { name: 'Add comment' }).click()
+  await expect(page.getByText('Filed the workaround for you.')).toBeVisible()
+  await expect(page.getByText('Devon Staff')).toBeVisible()
+
+  // The create form is reachable while acting, too.
   await page.goto('/cases/new')
-  await expect(page).toHaveURL(/\/cases$/)
-  await expect(page.getByRole('heading', { name: 'Create a case' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Create a case' })).toBeVisible()
 })

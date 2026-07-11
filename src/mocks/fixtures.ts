@@ -7,6 +7,8 @@ import type { CaseDetail, Contact, FileMeta, TimelineEntry } from '@/lib/api-typ
  */
 
 export const MOCK_SESSION_JWT = 'mock.workspace.jwt.v1'
+/** Distinct JWT for impersonated sessions so handlers can attribute writes. */
+export const MOCK_IMPERSONATED_JWT = 'mock.workspace.jwt.imp.v1'
 
 export const seedContact: Contact = {
   firstName: 'Dana',

@@ -11,7 +11,7 @@ import type {
   TimelineEntry,
   UploadFilesResponse,
 } from '@/lib/api-types'
-import { MOCK_SESSION_JWT, seedCases, seedContact } from './fixtures'
+import { MOCK_IMPERSONATED_JWT, MOCK_SESSION_JWT, seedCases, seedContact } from './fixtures'
 
 // MSW handlers implementing the FROZEN v1 client API contract exactly.
 // Paths are origin-agnostic (a leading "*" wildcard before "/v1/...") so the
@@ -120,10 +120,11 @@ export const handlers = [
           { status: 401 },
         )
       case 'impersonate-token': {
-        // Staff impersonation: same contact, read-only flag set (the real API rejects writes).
+        // Staff impersonation: writes are attributed to the actor (distinct
+        // JWT so the comment handler can mirror the API's rp-side entries).
         const body: AuthCompleteResponse = {
-          sessionJwt: MOCK_SESSION_JWT,
-          contact: { ...seedContact, impersonated: true },
+          sessionJwt: MOCK_IMPERSONATED_JWT,
+          contact: { ...seedContact, impersonated: true, actorName: 'Devon Staff' },
         }
         return HttpResponse.json(body)
       }
@@ -254,12 +255,16 @@ export const handlers = [
       )
     }
 
+    // Impersonated sessions mirror the API: attributed to the actor, rp-side.
+    const impersonated = request.headers.get('Authorization') === `Bearer ${MOCK_IMPERSONATED_JWT}`
     const entry: TimelineEntry = {
       id: nextEntryId(),
       kind: 'comment',
       at: new Date().toISOString(),
-      side: 'client',
-      author: { name: `${seedContact.firstName} ${seedContact.lastName}` },
+      side: impersonated ? 'rp' : 'client',
+      author: {
+        name: impersonated ? 'Devon Staff' : `${seedContact.firstName} ${seedContact.lastName}`,
+      },
       bodyText: commentBody.trim(),
     }
     found.timeline.push(entry)

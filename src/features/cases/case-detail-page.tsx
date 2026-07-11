@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
 import type { CaseDetail } from '@/lib/api-types'
 import { formatDate, relativeTime } from '@/lib/format'
-import { useSessionStore } from '@/stores/session'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { StatusChip } from '@/components/ui/status-chip'
@@ -174,10 +173,8 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
 }
 
 function ComposerSection({ detail }: { detail: CaseDetail }) {
-  // Impersonation sessions are read-only server-side; don't render an
-  // affordance that can only fail.
-  const impersonated = useSessionStore((s) => s.contact?.impersonated === true)
-  if (impersonated) return null
+  // Impersonated sessions write too — the API attributes their entries to
+  // the actor and renders them RevenuePoint-side.
   return (
     <section className="mt-8 border-t border-rule/50 pt-6">
       <CommentComposer caseId={detail.id} />

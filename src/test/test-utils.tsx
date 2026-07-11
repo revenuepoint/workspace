@@ -11,9 +11,11 @@ export function seedSession(): void {
   useSessionStore.getState().login(MOCK_SESSION_JWT, seedContact)
 }
 
-/** Sign in as staff viewing the fixture contact's workspace (read-only impersonation). */
+/** Sign in as staff acting in the fixture contact's workspace (attributed writes). */
 export function seedImpersonatedSession(): void {
-  useSessionStore.getState().login(MOCK_SESSION_JWT, { ...seedContact, impersonated: true })
+  useSessionStore
+    .getState()
+    .login(MOCK_SESSION_JWT, { ...seedContact, impersonated: true, actorName: 'Devon Staff' })
 }
 
 export function createTestQueryClient(): QueryClient {

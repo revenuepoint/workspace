@@ -29,11 +29,12 @@ describe('LoginCallbackPage', () => {
     expect(window.localStorage.getItem(RETURN_TO_KEY)).toBeNull()
   })
 
-  it('stores the impersonated flag from impersonation links', async () => {
+  it('stores the impersonated flag and actor from impersonation links', async () => {
     renderCallback('?token=impersonate-token')
 
     expect(await screen.findByText('stub:/cases')).toBeInTheDocument()
     expect(useSessionStore.getState().contact?.impersonated).toBe(true)
+    expect(useSessionStore.getState().contact?.actorName).toBe('Devon Staff')
   })
 
   it('shows the expired-link state with a fresh-link CTA', async () => {
