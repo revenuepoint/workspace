@@ -135,6 +135,51 @@ describe('api client', () => {
     expect((files[0] as File).name).toBe('notes.txt')
   })
 
+  it('multipart XHR path carries the bearer and rotates X-Session-Refresh', async () => {
+    signIn()
+    let authHeader: string | null = null
+    server.use(
+      http.post('*/v1/client/cases/:id/files', ({ request }) => {
+        authHeader = request.headers.get('Authorization')
+        return HttpResponse.json(
+          { files: [{ name: 'notes.txt', ok: true }] },
+          { status: 201, headers: { 'X-Session-Refresh': 'rotated-jwt-99' } },
+        )
+      }),
+    )
+
+    const file = new File(['hello'], 'notes.txt', { type: 'text/plain' })
+    const result = await api.uploadCaseFiles('case-0001', [file])
+
+    expect(result.files[0]).toMatchObject({ name: 'notes.txt', ok: true })
+    expect(authHeader).toBe(`Bearer ${MOCK_SESSION_JWT}`)
+    expect(useSessionStore.getState().jwt).toBe('rotated-jwt-99')
+  })
+
+  it('multipart XHR path maps errors to ApiError and routes 401s through expiry', async () => {
+    signIn()
+    const file = new File(['x'], 'x.txt', { type: 'text/plain' })
+
+    server.use(
+      http.post('*/v1/client/cases/:id/files', () =>
+        HttpResponse.json({ error: 'file_rejected', message: 'bad type' }, { status: 415 }),
+      ),
+    )
+    await expect(api.uploadCaseFiles('case-0001', [file])).rejects.toMatchObject({
+      status: 415,
+      code: 'file_rejected',
+    })
+
+    server.use(
+      http.post('*/v1/client/cases/:id/files', () =>
+        HttpResponse.json({ error: 'unauthorized' }, { status: 401 }),
+      ),
+    )
+    await expect(api.uploadCaseFiles('case-0001', [file])).rejects.toMatchObject({ status: 401 })
+    expect(useSessionStore.getState().jwt).toBeNull()
+    expect(useSessionStore.getState().expired).toBe(true)
+  })
+
   it('creates a case through the multipart endpoint', async () => {
     signIn()
     const file = new File(['col_a,col_b'], 'export.csv', { type: 'text/csv' })

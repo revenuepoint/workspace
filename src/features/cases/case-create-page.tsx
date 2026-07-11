@@ -136,6 +136,7 @@ export function CaseCreatePage() {
   const [restoredDraft] = useState(() => readDraft())
   const [showRestoredNote, setShowRestoredNote] = useState(() => draftHasContent(restoredDraft))
   const [confirmingLeave, setConfirmingLeave] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
 
   const {
     control,
@@ -166,16 +167,20 @@ export function CaseCreatePage() {
 
   const mutation = useMutation({
     mutationFn: (values: CreateCaseForm) =>
-      api.createCase({
-        recordType: values.recordType,
-        subject: values.subject,
-        description: values.description,
-        impact: values.impact || undefined,
-        urgency: values.urgency || undefined,
-        businessJustification:
-          values.recordType === 'change' ? values.businessJustification?.trim() || undefined : undefined,
-        files,
-      }),
+      api.createCase(
+        {
+          recordType: values.recordType,
+          subject: values.subject,
+          description: values.description,
+          impact: values.impact || undefined,
+          urgency: values.urgency || undefined,
+          businessJustification:
+            values.recordType === 'change' ? values.businessJustification?.trim() || undefined : undefined,
+          files,
+        },
+        files.length > 0 ? setUploadProgress : undefined,
+      ),
+    onSettled: () => setUploadProgress(null),
     onSuccess: (result) => {
       clearDraft()
       setCreated(result)
@@ -362,6 +367,18 @@ export function CaseCreatePage() {
         <Field>
           <MicroLabel>Attachments</MicroLabel>
           <FileDropZone files={files} onChange={setFiles} />
+          {uploadProgress !== null ? (
+            <div
+              role="progressbar"
+              aria-label="Upload progress"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(uploadProgress * 100)}
+              className="mt-2 h-0.5 w-full overflow-hidden rounded-full bg-rule/40"
+            >
+              <div className="h-full bg-crimson" style={{ width: `${Math.round(uploadProgress * 100)}%` }} />
+            </div>
+          ) : null}
         </Field>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule/50 pt-6">

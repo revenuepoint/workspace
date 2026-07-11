@@ -58,15 +58,13 @@ function handleSessionExpired(): void {
 
 interface RequestOptions {
   method?: 'GET' | 'POST'
-  /** JSON body — sets Content-Type. Mutually exclusive with formData. */
+  /** JSON body — sets Content-Type. (Multipart goes over xhrMultipart instead.) */
   json?: unknown
-  /** Multipart body — browser sets the boundary header itself. */
-  formData?: FormData
   /** false for the auth endpoints, where a 401 is a link problem, not an expired session. */
   auth?: boolean
   /** Caller cancellation (TanStack Query hands queries its own signal). */
   signal?: AbortSignal
-  /** false disables the 30s guard (downloads; multipart uploads are always exempt). */
+  /** false disables the 30s guard (downloads can honestly run long). */
   timeout?: boolean
 }
 
@@ -79,7 +77,7 @@ function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefin
 }
 
 async function rawRequest(path: string, options: RequestOptions = {}): Promise<Response> {
-  const { method = 'GET', json, formData, auth = true, signal: callerSignal, timeout = true } = options
+  const { method = 'GET', json, auth = true, signal: callerSignal, timeout = true } = options
 
   const headers = new Headers()
   if (json !== undefined) headers.set('Content-Type', 'application/json')
@@ -89,15 +87,15 @@ async function rawRequest(path: string, options: RequestOptions = {}): Promise<R
   }
 
   // A hung request must not spin forever — 30s guard on JSON traffic.
-  // Uploads (and downloads via timeout: false) can legitimately run longer.
-  const guard = timeout && formData === undefined ? AbortSignal.timeout(REQUEST_TIMEOUT_MS) : undefined
+  // Downloads opt out via timeout: false; uploads live on the XHR path.
+  const guard = timeout ? AbortSignal.timeout(REQUEST_TIMEOUT_MS) : undefined
 
   let response: Response
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method,
       headers,
-      body: json !== undefined ? JSON.stringify(json) : formData,
+      body: json !== undefined ? JSON.stringify(json) : undefined,
       signal: combineSignals(callerSignal, guard),
     })
   } catch (error) {
@@ -154,6 +152,63 @@ export interface CreateCaseInput {
   files: File[]
 }
 
+/** 0..1 upload fraction for multipart requests. */
+export type UploadProgress = (fraction: number) => void
+
+/**
+ * fetch can't report upload progress, so multipart requests go over XHR with
+ * identical semantics to rawRequest: bearer auth, X-Session-Refresh rotation,
+ * ApiError mapping, and the shared 401 session-expired flow. No timeout —
+ * uploads on slow links can honestly take minutes (same exemption as fetch).
+ */
+function xhrMultipart<T>(path: string, formData: FormData, onProgress?: UploadProgress): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${API_BASE_URL}${path}`)
+    const jwt = useSessionStore.getState().jwt
+    if (jwt) xhr.setRequestHeader('Authorization', `Bearer ${jwt}`)
+
+    if (onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && event.total > 0) onProgress(event.loaded / event.total)
+      }
+    }
+
+    xhr.onload = () => {
+      const refreshed = xhr.getResponseHeader('X-Session-Refresh')
+      if (refreshed && useSessionStore.getState().jwt) {
+        useSessionStore.getState().setJwt(refreshed)
+      }
+      if (xhr.status === 401) {
+        handleSessionExpired()
+        reject(new ApiError(401, 'unauthorized', 'Your session expired.'))
+        return
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        let code = 'request_failed'
+        let message: string | undefined
+        try {
+          const body = JSON.parse(xhr.responseText) as ApiErrorBody
+          if (body.error) code = body.error
+          message = body.message
+        } catch {
+          // Non-JSON error body — keep the generic code.
+        }
+        reject(new ApiError(xhr.status, code, message))
+        return
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText) as T)
+      } catch {
+        reject(new ApiError(xhr.status, 'bad_response', 'Unexpected response.'))
+      }
+    }
+    xhr.onerror = () =>
+      reject(new ApiError(0, 'network_error', 'We couldn’t reach RevenuePoint — check your connection.'))
+    xhr.send(formData)
+  })
+}
+
 /** Multipart helper — shared by case create and file upload. */
 export function buildMultipart(fields: Record<string, string | undefined>, files: File[]): FormData {
   const formData = new FormData()
@@ -183,7 +238,7 @@ export const api = {
     return request(`/v1/client/cases/${encodeURIComponent(id)}`, { signal: init?.signal })
   },
 
-  createCase(input: CreateCaseInput): Promise<CreateCaseResponse> {
+  createCase(input: CreateCaseInput, onProgress?: UploadProgress): Promise<CreateCaseResponse> {
     const formData = buildMultipart(
       {
         recordType: input.recordType,
@@ -195,7 +250,7 @@ export const api = {
       },
       input.files,
     )
-    return request('/v1/client/cases', { method: 'POST', formData })
+    return xhrMultipart('/v1/client/cases', formData, onProgress)
   },
 
   addComment(caseId: string, body: string): Promise<AddCommentResponse> {
@@ -205,11 +260,12 @@ export const api = {
     })
   },
 
-  uploadCaseFiles(caseId: string, files: File[]): Promise<UploadFilesResponse> {
-    return request(`/v1/client/cases/${encodeURIComponent(caseId)}/files`, {
-      method: 'POST',
-      formData: buildMultipart({}, files),
-    })
+  uploadCaseFiles(caseId: string, files: File[], onProgress?: UploadProgress): Promise<UploadFilesResponse> {
+    return xhrMultipart(
+      `/v1/client/cases/${encodeURIComponent(caseId)}/files`,
+      buildMultipart({}, files),
+      onProgress,
+    )
   },
 
   async downloadCaseFile(caseId: string, contentDocumentId: string): Promise<Blob> {

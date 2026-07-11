@@ -19,6 +19,7 @@ export function CommentComposer({ caseId }: { caseId: string }) {
   const queryClient = useQueryClient()
   const contact = useSessionStore((s) => s.contact)
   const [body, setBody] = useState('')
+  const [attachProgress, setAttachProgress] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const detailKey = ['case', caseId] as const
 
@@ -76,7 +77,7 @@ export function CommentComposer({ caseId }: { caseId: string }) {
   })
 
   const uploadMutation = useMutation({
-    mutationFn: (files: File[]) => api.uploadCaseFiles(caseId, files),
+    mutationFn: (files: File[]) => api.uploadCaseFiles(caseId, files, setAttachProgress),
     onSuccess: (result) => {
       const failed = result.files.filter((f) => !f.ok)
       const sent = result.files.length - failed.length
@@ -87,6 +88,7 @@ export function CommentComposer({ caseId }: { caseId: string }) {
     },
     onError: () => toast.error('Those files didn’t upload. Give it another try.'),
     onSettled: () => {
+      setAttachProgress(null)
       void queryClient.invalidateQueries({ queryKey: detailKey })
       void queryClient.invalidateQueries({ queryKey: ['cases'] })
     },
@@ -148,7 +150,11 @@ export function CommentComposer({ caseId }: { caseId: string }) {
             onClick={() => fileInputRef.current?.click()}
           >
             <Paperclip aria-hidden="true" />
-            {uploadMutation.isPending ? 'Attaching…' : 'Attach files'}
+            {uploadMutation.isPending
+              ? attachProgress !== null
+                ? `Attaching… ${Math.round(attachProgress * 100)}%`
+                : 'Attaching…'
+              : 'Attach files'}
           </Button>
           <span className="ml-3 hidden font-mono text-[11px] text-mute sm:inline">
             up to {MAX_FILES} files · 10 MB each
