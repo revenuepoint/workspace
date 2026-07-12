@@ -6,21 +6,23 @@ import { useSessionStore } from '@/stores/session'
 import { AppShell } from './app-shell'
 
 describe('AppShell', () => {
-  it('shows the account name and no banner on a normal session', () => {
+  it('shows the signed-in contact name, account, and no banner on a normal session', () => {
     seedSession()
     renderWithProviders(<AppShell />, { route: '/cases', path: '/cases' })
 
+    expect(screen.getByText('Dana Whitfield')).toBeInTheDocument()
     expect(screen.getByText('Acme Corp')).toBeInTheDocument()
     expect(screen.queryByText(/Acting as/)).not.toBeInTheDocument()
   })
 
-  it('shows the acting-as banner on impersonated sessions', () => {
+  it('shows the acting-as banner and the actor name on impersonated sessions', () => {
     seedImpersonatedSession()
     renderWithProviders(<AppShell />, { route: '/cases', path: '/cases' })
 
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Acting as Dana Whitfield (Acme Corp) — you are Devon Staff; actions are recorded as RevenuePoint',
-    )
+    expect(screen.getByRole('status')).toHaveTextContent('Acting as Dana Whitfield (Acme Corp)')
+    expect(screen.getByRole('status')).not.toHaveTextContent('actions are recorded')
+    // Top-right shows who's really signed in — the staff actor, not the contact.
+    expect(screen.getByText('Devon Staff')).toBeInTheDocument()
   })
 
   it('sign out clears the session and lands on /login', async () => {

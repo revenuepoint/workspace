@@ -12,12 +12,13 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { StatusChip } from '@/components/ui/status-chip'
 
-type SortKey = 'caseNumber' | 'subject' | 'status' | 'recordType' | 'lastActivity'
+type SortKey = 'caseNumber' | 'subject' | 'contact' | 'status' | 'recordType' | 'lastActivity'
 type SortDir = 'asc' | 'desc'
 
 const SORT_ACCESSORS: Record<SortKey, (c: CaseSummary) => string> = {
   caseNumber: (c) => c.caseNumber,
   subject: (c) => c.subject.toLowerCase(),
+  contact: (c) => (c.submittedBy?.name ?? '').toLowerCase(),
   status: (c) => c.statusLabel.toLowerCase(),
   recordType: (c) => c.recordTypeLabel.toLowerCase(),
   lastActivity: (c) => c.lastActivityAt,
@@ -144,7 +145,8 @@ export function CasesListPage() {
             >
               {label}
               {total !== undefined ? (
-                <span className="font-mono text-[0.6875rem] text-mute">{total}</span>
+                // Mono numerals ride high against the Geist label at this size — nudge down 1px.
+                <span className="relative top-px font-mono text-[0.6875rem] text-mute">{total}</span>
               ) : null}
             </button>
           )
@@ -216,9 +218,15 @@ export function CasesListPage() {
             onSeeAll={() => setScope('all')}
           />
         ) : narrow ? (
-          <CasesCards cases={sorted} />
+          <CasesCards cases={sorted} scope={scope} />
         ) : (
-          <CasesTable cases={sorted} sort={sort} onSort={toggleSort} onOpen={(id) => navigate(`/cases/${id}`)} />
+          <CasesTable
+            cases={sorted}
+            scope={scope}
+            sort={sort}
+            onSort={toggleSort}
+            onOpen={(id) => navigate(`/cases/${id}`)}
+          />
         )}
       </div>
     </div>
@@ -293,7 +301,7 @@ function EmptyState({
 }
 
 /** Narrow-screen layout: one tappable card per case, newest first. */
-function CasesCards({ cases }: { cases: CaseSummary[] }) {
+function CasesCards({ cases, scope }: { cases: CaseSummary[]; scope: Scope }) {
   return (
     <ul className="space-y-3 border-t border-rule/50 pt-4">
       {cases.map((c) => (
@@ -315,6 +323,9 @@ function CasesCards({ cases }: { cases: CaseSummary[] }) {
             <span className="mt-2.5 flex flex-wrap items-center gap-2">
               <StatusChip status={c.status} />
               <span className="text-xs text-mute">{c.recordTypeLabel}</span>
+              {scope === 'all' && c.submittedBy ? (
+                <span className="text-xs text-mute">· {c.submittedBy.name}</span>
+              ) : null}
             </span>
           </Link>
         </li>
@@ -323,7 +334,9 @@ function CasesCards({ cases }: { cases: CaseSummary[] }) {
   )
 }
 
-const COLUMNS: Array<{ key: SortKey; label: string; className?: string }> = [
+type Column = { key: SortKey; label: string; className?: string }
+
+const BASE_COLUMNS: Column[] = [
   { key: 'caseNumber', label: 'Case #' },
   { key: 'subject', label: 'Subject', className: 'w-full' },
   { key: 'status', label: 'Status' },
@@ -331,22 +344,33 @@ const COLUMNS: Array<{ key: SortKey; label: string; className?: string }> = [
   { key: 'lastActivity', label: 'Last activity' },
 ]
 
+// On "All cases" show who each case belongs to; under "My cases" that's always
+// the signed-in person, so the column would just be dead weight.
+function columnsFor(scope: Scope): Column[] {
+  if (scope !== 'all') return BASE_COLUMNS
+  const [caseNumber, subject, ...rest] = BASE_COLUMNS
+  return [caseNumber, subject, { key: 'contact', label: 'Contact' }, ...rest]
+}
+
 function CasesTable({
   cases,
+  scope,
   sort,
   onSort,
   onOpen,
 }: {
   cases: CaseSummary[]
+  scope: Scope
   sort: { key: SortKey; dir: SortDir }
   onSort: (key: SortKey) => void
   onOpen: (id: string) => void
 }) {
+  const showContact = scope === 'all'
   return (
     <table className="w-full border-collapse text-left">
       <thead>
         <tr className="border-b border-rule/70">
-          {COLUMNS.map((col) => {
+          {columnsFor(scope).map((col) => {
             const active = sort.key === col.key
             return (
               <th
@@ -397,6 +421,11 @@ function CasesTable({
                 {c.subject}
               </Link>
             </td>
+            {showContact ? (
+              <td className="whitespace-nowrap px-3 py-3.5 text-sm text-inkMid">
+                {c.submittedBy?.name ?? '—'}
+              </td>
+            ) : null}
             <td className="whitespace-nowrap px-3 py-3.5">
               <StatusChip status={c.status} />
             </td>

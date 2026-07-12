@@ -12,6 +12,14 @@ export function AppShell() {
   const logout = useSessionStore((s) => s.logout)
   const navigate = useNavigate()
 
+  // Who's actually signed in: on an impersonation session that's the staff
+  // actor (the contact is who they're acting *as*), otherwise the contact.
+  const displayName = contact
+    ? contact.impersonated
+      ? (contact.actorName ?? 'RevenuePoint staff')
+      : `${contact.firstName} ${contact.lastName}`
+    : null
+
   function signOut() {
     try {
       window.localStorage.removeItem(RETURN_TO_KEY)
@@ -36,7 +44,12 @@ export function AppShell() {
             <span className="micro-label hidden sm:inline">Workspace</span>
           </Link>
           <div className="flex items-center gap-5">
-            {contact ? <span className="micro-label hidden md:inline">{contact.accountName}</span> : null}
+            {contact ? (
+              <div className="hidden flex-col items-end leading-tight sm:flex">
+                <span className="text-sm font-medium text-ink">{displayName}</span>
+                <span className="micro-label">{contact.accountName}</span>
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={signOut}
@@ -54,8 +67,7 @@ export function AppShell() {
         // attributed to the actor.
         <div role="status" className="border-b border-crimson/30 bg-crimsonTint/50">
           <p className="mx-auto w-full max-w-5xl px-6 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-crimsonDeep">
-            Acting as {contact.firstName} {contact.lastName} ({contact.accountName}) — you are{' '}
-            {contact.actorName ?? 'RevenuePoint staff'}; actions are recorded as RevenuePoint
+            Acting as {contact.firstName} {contact.lastName} ({contact.accountName})
           </p>
         </div>
       ) : null}

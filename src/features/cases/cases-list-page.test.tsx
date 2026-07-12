@@ -46,6 +46,22 @@ describe('CasesListPage', () => {
     expect(screen.getByRole('button', { name: /All cases/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('adds a Contact column on "All cases" and drops it on "My cases"', async () => {
+    const user = userEvent.setup()
+    renderList()
+    await screen.findByText('Quarterly invoice shows duplicate line items')
+
+    // "My cases" — every row is the signed-in person, so no Contact column.
+    expect(screen.queryByRole('columnheader', { name: /Contact/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /All cases/ }))
+
+    // "All cases" — the column appears and names the case's contact.
+    expect(await screen.findByRole('columnheader', { name: /Contact/ })).toBeInTheDocument()
+    const marcusRow = screen.getByText('Payment webhook retries failing since Friday').closest('tr')
+    expect(marcusRow).toHaveTextContent('Marcus Feld')
+  })
+
   it('pins waiting-on-you cases to the top and announces the count', async () => {
     renderList()
 
