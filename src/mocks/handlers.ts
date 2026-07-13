@@ -4,6 +4,7 @@ import type {
   AddCommentResponse,
   AddParticipantResponse,
   AuthCompleteResponse,
+  CaseBooking,
   CaseDetail,
   CaseParticipant,
   CaseSummary,
@@ -36,6 +37,8 @@ let db: CaseDetail[] = seedCases()
 let caseSeq = 12_351
 let entrySeq = 5_000
 let docSeq = 5_000
+let mockBookings = new Map<string, CaseBooking>()
+let bookingSeq = 9_000
 
 /** Reset in-memory state between tests. */
 export function resetMockDb(): void {
@@ -43,6 +46,22 @@ export function resetMockDb(): void {
   caseSeq = 12_351
   entrySeq = 5_000
   docSeq = 5_000
+  mockBookings = new Map<string, CaseBooking>()
+}
+
+/** A handful of upcoming slots (mock availability — the real tz math lives in the API). */
+function mockSlots(): { startUtc: string; endUtc: string }[] {
+  const out: { startUtc: string; endUtc: string }[] = []
+  const now = new Date()
+  for (let d = 1; d <= 4; d++) {
+    for (const hourUtc of [13, 14, 17]) {
+      const start = new Date(now)
+      start.setUTCDate(start.getUTCDate() + d)
+      start.setUTCHours(hourUtc, 0, 0, 0)
+      out.push({ startUtc: start.toISOString(), endUtc: new Date(start.getTime() + 50 * 60_000).toISOString() })
+    }
+  }
+  return out
 }
 
 function unauthorized() {
@@ -323,6 +342,64 @@ export const handlers = [
     if (!found) return notFound()
     found.participants = (found.participants ?? []).filter((p) => p.contactId !== params.contactId)
     return new HttpResponse(null, { status: 204 })
+  }),
+
+  // --- Scheduling a call ---------------------------------------------------
+  http.get('*/v1/client/cases/:id/booking', ({ request, params }) => {
+    if (!isAuthorized(request)) return unauthorized()
+    const found = db.find((c) => c.id === params.id)
+    if (!found) return notFound()
+    return HttpResponse.json({ booking: mockBookings.get(String(params.id)) ?? null })
+  }),
+
+  http.get('*/v1/client/cases/:id/booking/availability', ({ request, params }) => {
+    if (!isAuthorized(request)) return unauthorized()
+    const found = db.find((c) => c.id === params.id)
+    if (!found) return notFound()
+    if (found.owner.isQueue) return HttpResponse.json({ error: 'no_owner_mailbox' }, { status: 409 })
+    return HttpResponse.json({ slots: mockSlots(), timeZone: 'America/New_York', durationMin: 50 })
+  }),
+
+  http.post('*/v1/client/cases/:id/booking', async ({ request, params }) => {
+    if (!isAuthorized(request)) return unauthorized()
+    const found = db.find((c) => c.id === params.id)
+    if (!found) return notFound()
+    const { startUtc } = (await request.json()) as { startUtc?: string }
+    if (!startUtc) return HttpResponse.json({ error: 'validation_failed' }, { status: 400 })
+    bookingSeq += 1
+    const booking: CaseBooking = {
+      bookingId: `bk-${bookingSeq}`,
+      startUtc,
+      endUtc: new Date(new Date(startUtc).getTime() + 50 * 60_000).toISOString(),
+      joinUrl: 'https://teams.microsoft.com/l/meetup-join/mock',
+    }
+    mockBookings.set(String(params.id), booking)
+    return HttpResponse.json(booking, { status: 201 })
+  }),
+
+  http.post('*/v1/client/cases/:id/booking/:bookingId/cancel', ({ request, params }) => {
+    if (!isAuthorized(request)) return unauthorized()
+    const found = db.find((c) => c.id === params.id)
+    if (!found) return notFound()
+    mockBookings.delete(String(params.id))
+    return HttpResponse.json({ ok: true })
+  }),
+
+  http.post('*/v1/client/cases/:id/booking/:bookingId/reschedule', async ({ request, params }) => {
+    if (!isAuthorized(request)) return unauthorized()
+    const found = db.find((c) => c.id === params.id)
+    if (!found) return notFound()
+    const existing = mockBookings.get(String(params.id))
+    if (!existing) return notFound()
+    const { startUtc } = (await request.json()) as { startUtc?: string }
+    if (!startUtc) return HttpResponse.json({ error: 'validation_failed' }, { status: 400 })
+    const updated: CaseBooking = {
+      ...existing,
+      startUtc,
+      endUtc: new Date(new Date(startUtc).getTime() + 50 * 60_000).toISOString(),
+    }
+    mockBookings.set(String(params.id), updated)
+    return HttpResponse.json(updated)
   }),
 
   // --- Comments ------------------------------------------------------------

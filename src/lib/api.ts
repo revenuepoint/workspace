@@ -7,6 +7,9 @@ import type {
   ApiErrorBody,
   AuthCompleteResponse,
   AuthStartResponse,
+  AvailabilityResponse,
+  CaseBooking,
+  CaseBookingResponse,
   CaseDetail,
   CaseListFilter,
   CasesListResponse,
@@ -282,6 +285,36 @@ export const api = {
       method: 'POST',
       json: { body },
     })
+  },
+
+  // --- Scheduling a call ---
+  getCaseBooking(caseId: string, init?: { signal?: AbortSignal }): Promise<CaseBookingResponse> {
+    return request(`/v1/client/cases/${encodeURIComponent(caseId)}/booking`, { signal: init?.signal })
+  },
+
+  getCaseAvailability(caseId: string, init?: { signal?: AbortSignal }): Promise<AvailabilityResponse> {
+    return request(`/v1/client/cases/${encodeURIComponent(caseId)}/booking/availability`, { signal: init?.signal })
+  },
+
+  bookCall(caseId: string, startUtc: string): Promise<CaseBooking> {
+    return request(`/v1/client/cases/${encodeURIComponent(caseId)}/booking`, {
+      method: 'POST',
+      json: { startUtc },
+    })
+  },
+
+  async cancelBooking(caseId: string, bookingId: string): Promise<void> {
+    await rawRequest(
+      `/v1/client/cases/${encodeURIComponent(caseId)}/booking/${encodeURIComponent(bookingId)}/cancel`,
+      { method: 'POST' },
+    )
+  },
+
+  rescheduleBooking(caseId: string, bookingId: string, startUtc: string): Promise<CaseBooking> {
+    return request(
+      `/v1/client/cases/${encodeURIComponent(caseId)}/booking/${encodeURIComponent(bookingId)}/reschedule`,
+      { method: 'POST', json: { startUtc } },
+    )
   },
 
   uploadCaseFiles(caseId: string, files: File[], onProgress?: UploadProgress): Promise<UploadFilesResponse> {

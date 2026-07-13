@@ -131,6 +131,37 @@ export interface AddParticipantResponse {
   participant: CaseParticipant
 }
 
+// ---------------------------------------------------------------------------
+// Scheduling a call (Case Escalation Call, on the owner's calendar)
+// ---------------------------------------------------------------------------
+
+/** An open slot — absolute UTC instants; the UI renders them in the viewer's local zone. */
+export interface AvailabilitySlot {
+  startUtc: string
+  endUtc: string
+}
+
+/** GET /v1/client/cases/:id/booking/availability — 200. */
+export interface AvailabilityResponse {
+  slots: AvailabilitySlot[]
+  /** IANA zone the slots were computed in (the host's) — for reference only. */
+  timeZone: string
+  durationMin: number
+}
+
+/** A booked call. */
+export interface CaseBooking {
+  bookingId: string
+  startUtc: string
+  endUtc: string
+  joinUrl: string | null
+}
+
+/** GET /v1/client/cases/:id/booking — the case's current upcoming call (or null). */
+export interface CaseBookingResponse {
+  booking: CaseBooking | null
+}
+
 /** POST /v1/client/cases (multipart) — 201. */
 export interface CreateCaseResponse {
   id: string

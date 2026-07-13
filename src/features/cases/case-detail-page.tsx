@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleCheck, TriangleAlert } from 'lucide-react'
+import { CalendarClock, CircleCheck, ExternalLink, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
 import type { CaseDetail, CaseParticipant } from '@/lib/api-types'
@@ -16,6 +16,7 @@ import { CasePath } from './case-path'
 import { CommentComposer } from './comment-composer'
 import { FileChip } from './file-chip'
 import { ParticipantPicker } from './participant-picker'
+import { ScheduleCallDialog } from './schedule-call-dialog'
 import { Timeline } from './timeline'
 
 export function CaseDetailPage() {
@@ -167,6 +168,8 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
         <div className="mt-8 space-y-8 lg:sticky lg:top-6 lg:mt-0">
           <ParticipantsPanel detail={detail} />
 
+          <ScheduleCallPanel detail={detail} />
+
           {detail.files.length > 0 ? (
             <section aria-labelledby="case-files-heading">
               <h2 id="case-files-heading" className="micro-label">
@@ -277,6 +280,102 @@ function ParticipantsPanel({ detail }: { detail: CaseDetail }) {
           busy={busy}
         />
       </div>
+    </section>
+  )
+}
+
+const localTime = (iso: string) =>
+  new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
+
+/**
+ * Schedule a Case Escalation Call on the owner's calendar. Shows the upcoming
+ * call (join / reschedule / cancel) or a "Schedule a call" button that opens the
+ * tz-aware picker. Hidden for queue-owned cases (no personal calendar yet). The
+ * request-a-call email lands here with ?book=1, which auto-opens the picker.
+ */
+function ScheduleCallPanel({ detail }: { detail: CaseDetail }) {
+  const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const isQueue = detail.owner.isQueue
+  // The request-a-call email lands on /cases/:id?book=1 — open the picker at
+  // mount from that flag (read once by the initializer).
+  const [dialog, setDialog] = useState<'new' | 'reschedule' | null>(() =>
+    searchParams.get('book') === '1' ? 'new' : null,
+  )
+
+  const bookingQuery = useQuery({
+    queryKey: ['case-booking', detail.id],
+    queryFn: ({ signal }) => api.getCaseBooking(detail.id, { signal }),
+    staleTime: 30_000,
+    enabled: !isQueue,
+  })
+  const booking = bookingQuery.data?.booking ?? null
+
+  const cancelMutation = useMutation({
+    mutationFn: () => api.cancelBooking(detail.id, booking!.bookingId),
+    onSuccess: () => {
+      toast.success('Your call was canceled.')
+      void queryClient.invalidateQueries({ queryKey: ['case-booking', detail.id] })
+    },
+    onError: () => toast.error('Couldn’t cancel the call. Give it another try.'),
+  })
+
+  if (isQueue) return null
+
+  return (
+    <section aria-labelledby="case-schedule-heading">
+      <h2 id="case-schedule-heading" className="micro-label">
+        Call
+      </h2>
+      <div className="mt-2.5">
+        {booking ? (
+          <div className="rounded-lg border border-rule/60 bg-paper/60 px-3.5 py-3">
+            <p className="text-sm font-medium text-ink">{localTime(booking.startUtc)}</p>
+            <p className="mt-0.5 font-mono text-[0.6875rem] text-mute">with {detail.owner.name}</p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {booking.joinUrl ? (
+                <a
+                  href={booking.joinUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-sm text-sm font-semibold text-crimson underline-offset-4 hover:underline"
+                >
+                  <ExternalLink aria-hidden="true" className="size-3.5" />
+                  Join
+                </a>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setDialog('reschedule')}
+                className="rounded-sm text-sm text-inkMid underline-offset-4 hover:text-crimson hover:underline"
+              >
+                Reschedule
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelMutation.mutate()}
+                disabled={cancelMutation.isPending}
+                className="rounded-sm text-sm text-inkMid underline-offset-4 hover:text-crimson hover:underline disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <Button variant="neutral" size="sm" onClick={() => setDialog('new')}>
+            <CalendarClock aria-hidden="true" />
+            Schedule a call
+          </Button>
+        )}
+      </div>
+
+      {dialog ? (
+        <ScheduleCallDialog
+          caseId={detail.id}
+          booking={dialog === 'reschedule' ? booking : null}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
     </section>
   )
 }
