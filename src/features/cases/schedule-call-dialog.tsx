@@ -94,7 +94,7 @@ export function ScheduleCallDialog({
 
   const mutation = useMutation({
     mutationFn: (startUtc: string) =>
-      isReschedule ? api.rescheduleBooking(caseId, booking!.bookingId, startUtc) : api.bookCall(caseId, startUtc),
+      isReschedule ? api.rescheduleBooking(caseId, booking!.ref, startUtc) : api.bookCall(caseId, startUtc),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['case-booking', caseId] })
       if (isReschedule) {

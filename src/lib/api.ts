@@ -303,18 +303,18 @@ export const api = {
     })
   },
 
-  async cancelBooking(caseId: string, bookingId: string): Promise<void> {
-    await rawRequest(
-      `/v1/client/cases/${encodeURIComponent(caseId)}/booking/${encodeURIComponent(bookingId)}/cancel`,
-      { method: 'POST' },
-    )
+  async cancelBooking(caseId: string, ref: string): Promise<void> {
+    await rawRequest(`/v1/client/cases/${encodeURIComponent(caseId)}/booking/cancel`, {
+      method: 'POST',
+      json: { ref },
+    })
   },
 
-  rescheduleBooking(caseId: string, bookingId: string, startUtc: string): Promise<CaseBooking> {
-    return request(
-      `/v1/client/cases/${encodeURIComponent(caseId)}/booking/${encodeURIComponent(bookingId)}/reschedule`,
-      { method: 'POST', json: { startUtc } },
-    )
+  rescheduleBooking(caseId: string, ref: string, startUtc: string): Promise<CaseBooking> {
+    return request(`/v1/client/cases/${encodeURIComponent(caseId)}/booking/reschedule`, {
+      method: 'POST',
+      json: { ref, startUtc },
+    })
   },
 
   uploadCaseFiles(caseId: string, files: File[], onProgress?: UploadProgress): Promise<UploadFilesResponse> {

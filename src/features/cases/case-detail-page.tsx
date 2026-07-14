@@ -312,7 +312,7 @@ function ScheduleCallPanel({ detail }: { detail: CaseDetail }) {
   const booking = bookingQuery.data?.booking ?? null
 
   const cancelMutation = useMutation({
-    mutationFn: () => api.cancelBooking(detail.id, booking!.bookingId),
+    mutationFn: () => api.cancelBooking(detail.id, booking!.ref),
     onSuccess: () => {
       toast.success('Your call was canceled.')
       void queryClient.invalidateQueries({ queryKey: ['case-booking', detail.id] })

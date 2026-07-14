@@ -149,9 +149,9 @@ export interface AvailabilityResponse {
   durationMin: number
 }
 
-/** A booked call. */
+/** A booked call. `ref` is the signed capability token for cancel/reschedule. */
 export interface CaseBooking {
-  bookingId: string
+  ref: string
   startUtc: string
   endUtc: string
   joinUrl: string | null

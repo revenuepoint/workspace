@@ -368,7 +368,7 @@ export const handlers = [
     if (!startUtc) return HttpResponse.json({ error: 'validation_failed' }, { status: 400 })
     bookingSeq += 1
     const booking: CaseBooking = {
-      bookingId: `bk-${bookingSeq}`,
+      ref: `ref-${bookingSeq}`,
       startUtc,
       endUtc: new Date(new Date(startUtc).getTime() + 50 * 60_000).toISOString(),
       joinUrl: 'https://teams.microsoft.com/l/meetup-join/mock',
@@ -377,7 +377,7 @@ export const handlers = [
     return HttpResponse.json(booking, { status: 201 })
   }),
 
-  http.post('*/v1/client/cases/:id/booking/:bookingId/cancel', ({ request, params }) => {
+  http.post('*/v1/client/cases/:id/booking/cancel', ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
     const found = db.find((c) => c.id === params.id)
     if (!found) return notFound()
@@ -385,7 +385,7 @@ export const handlers = [
     return HttpResponse.json({ ok: true })
   }),
 
-  http.post('*/v1/client/cases/:id/booking/:bookingId/reschedule', async ({ request, params }) => {
+  http.post('*/v1/client/cases/:id/booking/reschedule', async ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
     const found = db.find((c) => c.id === params.id)
     if (!found) return notFound()
