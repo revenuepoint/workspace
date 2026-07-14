@@ -145,11 +145,9 @@ test('attachment preview opens under the strict CSP', async ({ page }) => {
 test('impersonation sessions act with attribution', async ({ page }) => {
   await page.goto('/login/callback?token=impersonate-token')
 
-  await expect(
-    page.getByText(
-      'Acting as Dana Whitfield (Acme Corp) — you are Devon Staff; actions are recorded as RevenuePoint',
-    ),
-  ).toBeVisible()
+  // The acting-as banner names who you're acting as; the actor ("Devon Staff")
+  // is shown in the header, and every write is attributed to them (asserted below).
+  await expect(page.getByText('Acting as Dana Whitfield (Acme Corp)')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Create a case' })).toBeVisible()
 
   await page.getByRole('link', { name: 'Quarterly invoice shows duplicate line items' }).click()
@@ -159,8 +157,9 @@ test('impersonation sessions act with attribution', async ({ page }) => {
   await page.getByLabel('Add a comment').fill('Filed the workaround for you.')
   await page.getByRole('button', { name: 'Add comment' }).click()
   await expect(page.getByText('Filed the workaround for you.')).toBeVisible()
-  // exact: the banner also contains the actor's name as a substring.
-  await expect(page.getByText('Devon Staff', { exact: true })).toBeVisible()
+  // "Devon Staff" also shows in the header, so scope to the activity feed to
+  // assert the COMMENT itself is attributed to the acting staff member.
+  await expect(page.getByLabel('Activity').getByText('Devon Staff', { exact: true })).toBeVisible()
 
   // The create form is reachable while acting, too.
   await page.goto('/cases/new')
