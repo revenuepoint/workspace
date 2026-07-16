@@ -9,6 +9,7 @@ import { useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
 import { Button } from '@/components/ui/button'
+import { SensitiveChip } from '@/components/ui/sensitive-chip'
 import { Spinner } from '@/components/ui/spinner'
 import { StatusChip } from '@/components/ui/status-chip'
 
@@ -322,6 +323,7 @@ function CasesCards({ cases, scope }: { cases: CaseSummary[]; scope: Scope }) {
             </span>
             <span className="mt-2.5 flex flex-wrap items-center gap-2">
               <StatusChip status={c.status} />
+              {c.sensitive ? <SensitiveChip /> : null}
               <span className="text-xs text-mute">{c.recordTypeLabel}</span>
               {scope === 'all' && c.submittedBy ? (
                 <span className="text-xs text-mute">· {c.submittedBy.name}</span>
@@ -427,7 +429,10 @@ function CasesTable({
               </td>
             ) : null}
             <td className="whitespace-nowrap px-3 py-3.5">
-              <StatusChip status={c.status} />
+              <span className="inline-flex items-center gap-1.5">
+                <StatusChip status={c.status} />
+                {c.sensitive ? <SensitiveChip /> : null}
+              </span>
             </td>
             <td className="whitespace-nowrap px-3 py-3.5 text-sm text-inkMid">{c.recordTypeLabel}</td>
             <td className="whitespace-nowrap px-3 py-3.5 font-mono text-[0.8125rem] text-mute last:pr-2">

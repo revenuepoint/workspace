@@ -185,7 +185,45 @@ describe('CaseCreatePage', () => {
     expect(screen.getByRole('heading', { name: /#\d{8}/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'View case' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to cases' })).toBeInTheDocument()
+    // An ordinary case makes no visibility promise…
+    expect(screen.queryByText(/Marked sensitive/)).not.toBeInTheDocument()
     // A sent case never leaves a stale draft behind.
     expect(window.sessionStorage.getItem('rp:workspace:case-draft')).toBeNull()
+  })
+
+  it('offers the Sensitive case checkbox, unchecked by default', () => {
+    renderCreate()
+
+    expect(screen.getByRole('checkbox', { name: 'Sensitive case' })).not.toBeChecked()
+    expect(
+      screen.getByText(/Only you, the participants you add above, and RevenuePoint will see this case/),
+    ).toBeInTheDocument()
+  })
+
+  it('sends a sensitive case and confirms it on the success screen', async () => {
+    const user = userEvent.setup()
+    renderCreate()
+
+    await user.type(screen.getByLabelText('Subject'), 'Keep this off the shared queue')
+    await user.type(screen.getByLabelText('Description'), 'Salary lines in the payroll export.')
+    await user.click(screen.getByRole('checkbox', { name: 'Sensitive case' }))
+    await user.click(screen.getByRole('button', { name: 'Send to RevenuePoint' }))
+
+    expect(await screen.findByText('Case created')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Marked sensitive — only you, the participants you added/),
+    ).toBeInTheDocument()
+  })
+
+  it('restores the sensitive choice from the draft', async () => {
+    const user = userEvent.setup()
+    const first = renderCreate()
+    await user.type(screen.getByLabelText('Subject'), 'Sensitive draft')
+    await user.click(screen.getByRole('checkbox', { name: 'Sensitive case' }))
+    first.unmount()
+
+    renderCreate()
+    expect(screen.getByRole('checkbox', { name: 'Sensitive case' })).toBeChecked()
+    expect(screen.getByText(/Picked up where you left off/)).toBeInTheDocument()
   })
 })

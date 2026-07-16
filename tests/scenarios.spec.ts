@@ -165,3 +165,51 @@ test('impersonation sessions act with attribution', async ({ page }) => {
   await page.goto('/cases/new')
   await expect(page.getByRole('heading', { name: 'Create a case' })).toBeVisible()
 })
+
+test('sensitive cases stay inside their circle', async ({ page }) => {
+  await page.goto('/login/callback?token=e2e-sensitive')
+  await expect(page.getByRole('heading', { name: 'Acme Corp · Cases' })).toBeVisible()
+
+  // Dana participates on this sensitive case → it's in My cases, marked.
+  const row = page.getByRole('row').filter({ hasText: 'Payroll export includes former-employee' })
+  await expect(row).toBeVisible()
+  await expect(row.getByText('Sensitive', { exact: true })).toBeVisible()
+
+  // Open it: the banner spells out exactly who can see it.
+  await page.getByRole('link', { name: /Payroll export includes former-employee/ }).click()
+  await expect(page.getByText('Sensitive case', { exact: true })).toBeVisible()
+  await expect(page.getByText(/hidden from everyone else at Acme Corp/)).toBeVisible()
+
+  // Marcus's sensitive case leaves no trace for Dana — even under All cases…
+  await page.getByRole('link', { name: 'Cases', exact: true }).click()
+  await page.getByRole('button', { name: /All cases/ }).click()
+  await expect(page.getByText('Payment webhook retries failing since Friday')).toBeVisible()
+  await expect(page.getByText('Access review for the finance director transition')).toBeHidden()
+
+  // …and navigating straight to it reads as a case that never existed.
+  await page.goto('/cases/case-0012')
+  await expect(page.getByText(/This case doesn.t exist/)).toBeVisible()
+})
+
+test('creating a sensitive case round-trips the flag', async ({ page }) => {
+  await page.goto('/login/callback?token=e2e-create-sensitive')
+  await page.getByRole('link', { name: 'Create a case' }).click()
+
+  await page.getByLabel('Subject').fill('Contract terms for the acquisition')
+  await page.getByLabel('Description').fill('Restrict this one to me, please.')
+  await page.getByRole('checkbox', { name: 'Sensitive case' }).check()
+  await page.getByRole('button', { name: 'Send to RevenuePoint' }).click()
+
+  await expect(page.getByText('Case created')).toBeVisible()
+  await expect(page.getByText(/Marked sensitive/)).toBeVisible()
+
+  // The created case carries the chip + banner.
+  await page.getByRole('link', { name: 'View case' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Contract terms for the acquisition' }),
+  ).toBeVisible()
+  await expect(page.getByText('Sensitive case', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText(/Only you, the participants on this case, and RevenuePoint can see it/),
+  ).toBeVisible()
+})

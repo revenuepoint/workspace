@@ -5,13 +5,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as RadioGroup from '@radix-ui/react-radio-group'
-import { Bug, CircleCheck, HelpCircle, Sparkles, TriangleAlert } from 'lucide-react'
+import { Bug, CircleCheck, EyeOff, HelpCircle, Sparkles, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import type { CreateCaseResponse } from '@/lib/api-types'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldError, FieldHint, MicroLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -33,6 +34,7 @@ const EMPTY_FORM: CreateCaseForm = {
   impact: '',
   urgency: '',
   businessJustification: '',
+  sensitive: false,
 }
 
 function readDraft(): CreateCaseForm | null {
@@ -51,6 +53,7 @@ function readDraft(): CreateCaseForm | null {
       impact: str(parsed.impact),
       urgency: str(parsed.urgency),
       businessJustification: str(parsed.businessJustification),
+      sensitive: parsed.sensitive === true,
     }
   } catch {
     return null
@@ -95,6 +98,7 @@ const createCaseSchema = z.object({
   impact: z.string(),
   urgency: z.string(),
   businessJustification: z.string().optional(),
+  sensitive: z.boolean(),
 })
 
 type CreateCaseForm = z.infer<typeof createCaseSchema>
@@ -133,9 +137,14 @@ export function CaseCreatePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const selfEmail = useSessionStore((s) => s.contact?.email ?? '')
+  const accountName = useSessionStore((s) => s.contact?.accountName)
   const [files, setFiles] = useState<File[]>([])
   const [participantIds, setParticipantIds] = useState<string[]>([])
-  const [created, setCreated] = useState<CreateCaseResponse | null>(null)
+  // The response carries no sensitive flag, so the success screen gets it
+  // from the submitted form values instead.
+  const [created, setCreated] = useState<{ result: CreateCaseResponse; sensitive: boolean } | null>(
+    null,
+  )
 
   // Colleagues at the account (minus yourself — you're the submitter, always added).
   const contactsQuery = useQuery({
@@ -192,14 +201,15 @@ export function CaseCreatePage() {
           businessJustification:
             values.recordType === 'change' ? values.businessJustification?.trim() || undefined : undefined,
           participants: participantIds.length ? participantIds : undefined,
+          sensitive: values.sensitive || undefined,
           files,
         },
         files.length > 0 ? setUploadProgress : undefined,
       ),
     onSettled: () => setUploadProgress(null),
-    onSuccess: (result) => {
+    onSuccess: (result, values) => {
       clearDraft()
-      setCreated(result)
+      setCreated({ result, sensitive: values.sensitive })
       void queryClient.invalidateQueries({ queryKey: ['cases'] })
       window.scrollTo({ top: 0 })
     },
@@ -219,7 +229,7 @@ export function CaseCreatePage() {
   }
 
   if (created) {
-    return <CreateSuccess result={created} />
+    return <CreateSuccess result={created.result} sensitive={created.sensitive} />
   }
 
   return (
@@ -393,6 +403,27 @@ export function CaseCreatePage() {
           </FieldHint>
         </Field>
 
+        {/* Visibility — a sensitive case stays between the circle above and RevenuePoint */}
+        <Field>
+          <MicroLabel>Visibility</MicroLabel>
+          <label
+            htmlFor="case-sensitive"
+            className="flex cursor-pointer items-start gap-3 rounded-md border border-rule/60 bg-cream/60 px-4 py-3"
+          >
+            <Checkbox
+              id="case-sensitive"
+              aria-describedby="case-sensitive-hint"
+              className="mt-0.5"
+              {...register('sensitive')}
+            />
+            <span className="text-sm font-medium text-ink">Sensitive case</span>
+          </label>
+          <FieldHint id="case-sensitive-hint">
+            Only you, the participants you add above, and RevenuePoint will see this case. Other
+            colleagues at {accountName ?? 'your account'} won&rsquo;t.
+          </FieldHint>
+        </Field>
+
         {/* Files */}
         <Field>
           <MicroLabel>Attachments</MicroLabel>
@@ -436,7 +467,7 @@ export function CaseCreatePage() {
   )
 }
 
-function CreateSuccess({ result }: { result: CreateCaseResponse }) {
+function CreateSuccess({ result, sensitive }: { result: CreateCaseResponse; sensitive: boolean }) {
   const failedFiles = result.files.filter((f) => !f.ok)
 
   return (
@@ -450,6 +481,14 @@ function CreateSuccess({ result }: { result: CreateCaseResponse }) {
         It&rsquo;s with our team — new cases are triaged within one business day. We&rsquo;ll reply
         by email, and every update lands on the case page too.
       </p>
+
+      {sensitive ? (
+        <p className="mx-auto mt-4 flex max-w-sm items-start justify-center gap-2 text-sm leading-relaxed text-inkMid">
+          <EyeOff aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-navy" />
+          Marked sensitive — only you, the participants you added, and RevenuePoint can see this
+          case.
+        </p>
+      ) : null}
 
       {failedFiles.length > 0 ? (
         <div className="mx-auto mt-6 max-w-sm rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-left">

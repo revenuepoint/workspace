@@ -112,6 +112,16 @@ function isMine(c: CaseDetail): boolean {
   return (c.participants ?? []).some((p) => p.email.toLowerCase() === seedContact.email.toLowerCase())
 }
 
+/** Mirror of the API's sensitive rule: hidden cases don't exist for the viewer. */
+function isVisible(c: CaseDetail): boolean {
+  return !c.sensitive || isMine(c)
+}
+
+/** The shared :id lookup — a sensitive case outside the circle 404s like a missing one. */
+function findVisible(id: string | readonly string[] | undefined): CaseDetail | undefined {
+  return db.find((c) => c.id === id && isVisible(c))
+}
+
 function toSummary(c: CaseDetail): CaseSummary {
   return {
     id: c.id,
@@ -127,6 +137,7 @@ function toSummary(c: CaseDetail): CaseSummary {
     lastActivityAt: c.lastActivityAt,
     submittedBy: c.submittedBy,
     mine: isMine(c),
+    sensitive: c.sensitive ?? false,
   }
 }
 
@@ -212,17 +223,20 @@ export const handlers = [
     if (!isAuthorized(request)) return unauthorized()
 
     const status = new URL(request.url).searchParams.get('status') ?? 'open'
+    // Like the real API: sensitive cases outside the circle vanish BEFORE
+    // counts, so nothing hints they exist.
+    const visible = db.filter(isVisible)
     const counts = {
-      open: db.filter((c) => c.statusGroup === 'open').length,
-      closed: db.filter((c) => c.statusGroup === 'closed').length,
+      open: visible.filter((c) => c.statusGroup === 'open').length,
+      closed: visible.filter((c) => c.statusGroup === 'closed').length,
     }
-    const mine = db.filter(isMine)
+    const mine = visible.filter(isMine)
     const mineCounts = {
       open: mine.filter((c) => c.statusGroup === 'open').length,
       closed: mine.filter((c) => c.statusGroup === 'closed').length,
     }
     const cases =
-      status === 'all' ? db : db.filter((c) => c.statusGroup === (status as StatusGroup))
+      status === 'all' ? visible : visible.filter((c) => c.statusGroup === (status as StatusGroup))
 
     const body: CasesListResponse = {
       cases: cases
@@ -250,6 +264,7 @@ export const handlers = [
     }
 
     const uploads = form.getAll('files').filter((v): v is File => v instanceof File)
+    const sensitive = form.get('sensitive') === 'true'
     const now = new Date().toISOString()
     caseSeq += 1
     const caseNumber = String(caseSeq).padStart(8, '0')
@@ -291,6 +306,7 @@ export const handlers = [
       lastModifiedAt: now,
       submittedBy: { name: `${seedContact.firstName} ${seedContact.lastName}` },
       owner: { name: 'Client Success', isQueue: true },
+      sensitive,
       description,
       // Submitter is always a participant; add the account-validated picks.
       participants: participantsFromForm(form),
@@ -310,7 +326,7 @@ export const handlers = [
   // --- Cases: detail -------------------------------------------------------
   http.get('*/v1/client/cases/:id', ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
     return HttpResponse.json(found)
   }),
@@ -324,7 +340,7 @@ export const handlers = [
   // --- Participants: add / remove ------------------------------------------
   http.post('*/v1/client/cases/:id/participants', async ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
     const { contactId } = (await request.json()) as { contactId?: string }
     const contact = seedAccountContacts.find((c) => c.contactId === contactId)
@@ -338,7 +354,7 @@ export const handlers = [
 
   http.delete('*/v1/client/cases/:id/participants/:contactId', ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
     found.participants = (found.participants ?? []).filter((p) => p.contactId !== params.contactId)
     return new HttpResponse(null, { status: 204 })
@@ -347,14 +363,14 @@ export const handlers = [
   // --- Scheduling a call ---------------------------------------------------
   http.get('*/v1/client/cases/:id/booking', ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
     return HttpResponse.json({ booking: mockBookings.get(String(params.id)) ?? null })
   }),
 
   http.get('*/v1/client/cases/:id/booking/availability', ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
     if (found.owner.isQueue) return HttpResponse.json({ error: 'no_owner_mailbox' }, { status: 409 })
     return HttpResponse.json({ slots: mockSlots(), timeZone: 'America/New_York', durationMin: 50 })
@@ -362,7 +378,7 @@ export const handlers = [
 
   http.post('*/v1/client/cases/:id/booking', async ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
     const { startUtc } = (await request.json()) as { startUtc?: string }
     if (!startUtc) return HttpResponse.json({ error: 'validation_failed' }, { status: 400 })
@@ -379,7 +395,7 @@ export const handlers = [
 
   http.post('*/v1/client/cases/:id/booking/cancel', ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
     mockBookings.delete(String(params.id))
     return HttpResponse.json({ ok: true })
@@ -387,7 +403,7 @@ export const handlers = [
 
   http.post('*/v1/client/cases/:id/booking/reschedule', async ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
     const existing = mockBookings.get(String(params.id))
     if (!existing) return notFound()
@@ -405,7 +421,7 @@ export const handlers = [
   // --- Comments ------------------------------------------------------------
   http.post('*/v1/client/cases/:id/comments', async ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
 
     const { body: commentBody } = (await request.json()) as { body?: string }
@@ -439,7 +455,7 @@ export const handlers = [
   // --- File upload -----------------------------------------------------------
   http.post('*/v1/client/cases/:id/files', async ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     if (!found) return notFound()
 
     const form = await request.formData()
@@ -470,7 +486,7 @@ export const handlers = [
   // --- File download -----------------------------------------------------------
   http.get('*/v1/client/cases/:id/files/:docId/download', ({ request, params }) => {
     if (!isAuthorized(request)) return unauthorized()
-    const found = db.find((c) => c.id === params.id)
+    const found = findVisible(params.id)
     const file = found?.files.find((f) => f.contentDocumentId === params.docId)
     if (!found || !file) return notFound()
 

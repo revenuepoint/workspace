@@ -2,8 +2,10 @@ import type { CaseDetail, CaseParticipant, Contact, FileMeta, TimelineEntry } fr
 
 /**
  * Seed data for MSW — one realistic client account ("Acme Corp") with
- * 6 open + 4 closed cases across all record types. Timestamps are relative
- * to now so "last activity" reads naturally in dev.
+ * 8 open + 4 closed cases across all record types. Timestamps are relative
+ * to now so "last activity" reads naturally in dev. Two of the open cases are
+ * sensitive: case-0011 (Dana participates → visible to her) and case-0012
+ * (Marcus only → the handlers hide it from Dana entirely, like the real API).
  */
 
 export const MOCK_SESSION_JWT = 'mock.workspace.jwt.v1'
@@ -328,6 +330,63 @@ export function seedCases(): CaseDetail[] {
       // Marcus submitted this; Dana is a CC'd participant → it appears in her
       // "My cases" even though she didn't submit it.
       participants: [marcusParticipant, danaParticipant],
+    },
+    {
+      // Sensitive + Dana participates: she sees it (chip + banner), colleagues
+      // outside the circle don't. Submitted by Marcus to prove the participant
+      // path — not just the submitter path.
+      id: 'case-0011',
+      caseNumber: '00012347',
+      subject: 'Payroll export includes former-employee salary lines',
+      status: 'In Review',
+      statusLabel: 'In review',
+      statusGroup: 'open',
+      waitingOnYou: false,
+      recordType: 'support',
+      recordTypeLabel: 'Support request',
+      createdAt: ago(2),
+      lastActivityAt: ago(0, 9),
+      lastModifiedAt: ago(0, 9),
+      submittedBy: { name: COLLEAGUE },
+      owner: { name: 'Priya Raman', isQueue: false },
+      sensitive: true,
+      description:
+        'The payroll export Marcus pulled Monday still carries salary lines for two people who left last quarter. HR asked us to keep this off the shared queue — Dana is added since she owns the reconciliation.',
+      timeline: [
+        {
+          id: 'tl-1001',
+          kind: 'created',
+          at: ago(2),
+          side: 'system',
+          author: { name: COLLEAGUE },
+        },
+      ],
+      files: [],
+      participants: [marcusParticipant, danaParticipant],
+    },
+    {
+      // Sensitive + Marcus only: the handlers hide this from Dana completely
+      // (absent from lists/counts, 404 on direct navigation) — the fixture
+      // that proves hiding, mirroring the API's server-side filter.
+      id: 'case-0012',
+      caseNumber: '00012348',
+      subject: 'Access review for the finance director transition',
+      status: 'New',
+      statusLabel: 'Received',
+      statusGroup: 'open',
+      waitingOnYou: false,
+      recordType: 'support',
+      recordTypeLabel: 'Support request',
+      createdAt: ago(1),
+      lastActivityAt: ago(1),
+      lastModifiedAt: ago(1),
+      submittedBy: { name: COLLEAGUE },
+      owner: { name: 'Client Success', isQueue: true },
+      sensitive: true,
+      description: 'Personnel change — details restricted to the submitter.',
+      timeline: [],
+      files: [],
+      participants: [marcusParticipant],
     },
     {
       // Spec: one case with an intentionally empty timeline.

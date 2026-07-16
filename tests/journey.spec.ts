@@ -20,13 +20,13 @@ test('login → list → case detail → comment → create case', async ({ page
   // --- /cases: the default landing (defaults to "My cases") --------------
   await expect(page.getByRole('heading', { name: 'Acme Corp · Cases' })).toBeVisible()
   await expect(page.getByRole('button', { name: /My cases/ })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: /Open \(5\)/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Open \(6\)/ })).toBeVisible()
   await expect(page.getByText('00012341')).toBeVisible()
 
   // Closed filter swaps the rows (Dana has 3 closed)
   await page.getByRole('button', { name: /Closed \(3\)/ }).click()
   await expect(page.getByText('00012337')).toBeVisible()
-  await page.getByRole('button', { name: /Open \(5\)/ }).click()
+  await page.getByRole('button', { name: /Open \(6\)/ }).click()
 
   // --- case detail ---------------------------------------------------------
   await page.getByRole('link', { name: 'Quarterly invoice shows duplicate line items' }).click()

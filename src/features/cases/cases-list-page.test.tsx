@@ -23,11 +23,12 @@ describe('CasesListPage', () => {
     // …but a colleague's case she's not on does NOT.
     expect(screen.queryByText('Payment webhook retries failing since Friday')).not.toBeInTheDocument()
 
-    // "My cases" scope active; counts = Dana's 5 open (4 submitted + 1 participant) / 3 closed.
+    // "My cases" scope active; counts = Dana's 6 open (4 submitted + 2 participant,
+    // one of them sensitive) / 3 closed.
     expect(screen.getByRole('button', { name: /My cases/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: /Open \(5\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Open \(6\)/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Closed \(3\)/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /All \(8\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /All \(9\)/ })).toBeInTheDocument()
 
     expect(screen.getByRole('columnheader', { name: /Case #/ })).toBeInTheDocument()
   })
@@ -39,11 +40,44 @@ describe('CasesListPage', () => {
 
     await user.click(screen.getByRole('button', { name: /All cases/ }))
 
-    // Marcus Feld's case now appears; counts jump to the account-wide totals.
+    // Marcus Feld's case now appears; counts jump to the account-wide totals
+    // (which already exclude the sensitive case Dana isn't on).
     expect(await screen.findByText('Payment webhook retries failing since Friday')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Open \(6\)/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /All \(10\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Open \(7\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /All \(11\)/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /All cases/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('hides sensitive cases outside your circle, even under "All cases"', async () => {
+    const user = userEvent.setup()
+    renderList()
+    await screen.findByText('Quarterly invoice shows duplicate line items')
+
+    await user.click(screen.getByRole('button', { name: /All cases/ }))
+    await screen.findByText('Payment webhook retries failing since Friday')
+
+    // Dana participates on this sensitive case → visible under All too…
+    expect(
+      screen.getByText('Payroll export includes former-employee salary lines'),
+    ).toBeInTheDocument()
+    // …but Marcus's sensitive case leaves no trace for her (the mock, like the
+    // real API, filters it server-side — nothing for the SPA to even hide).
+    expect(
+      screen.queryByText('Access review for the finance director transition'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('marks visible sensitive cases with the Sensitive chip', async () => {
+    renderList()
+
+    const subject = await screen.findByText('Payroll export includes former-employee salary lines')
+    const row = subject.closest('tr')
+    expect(row).not.toBeNull()
+    expect(row!).toHaveTextContent('Sensitive')
+
+    // Ordinary cases carry no such marker.
+    const calmRow = screen.getByText('Quarterly invoice shows duplicate line items').closest('tr')
+    expect(calmRow!).not.toHaveTextContent('Sensitive')
   })
 
   it('adds a Contact column on "All cases" and drops it on "My cases"', async () => {

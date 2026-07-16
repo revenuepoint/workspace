@@ -217,4 +217,34 @@ describe('CaseDetailPage', () => {
     expect(await screen.findByText(/This case doesn.t exist/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to cases' })).toBeInTheDocument()
   })
+
+  it('shows the Sensitive chip and banner on a sensitive case you participate in', async () => {
+    renderDetail('case-0011')
+    await screen.findByRole('heading', { name: /Payroll export includes former-employee/ })
+
+    // Appears twice: the meta-row chip AND the banner heading.
+    expect(screen.getAllByText(/Sensitive/)).toHaveLength(2)
+    expect(screen.getByText('Sensitive case')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Only you, the participants on this case, and RevenuePoint can see it/),
+    ).toBeInTheDocument()
+    // The banner names the account so the promise is concrete.
+    expect(screen.getByText(/hidden from everyone else at Acme Corp/)).toBeInTheDocument()
+  })
+
+  it('renders ordinary cases without any sensitive marker', async () => {
+    renderDetail('case-0001')
+    await screen.findByRole('heading', { name: /Quarterly invoice/ })
+
+    expect(screen.queryByText(/Sensitive/)).not.toBeInTheDocument()
+  })
+
+  it('renders the not-found state for a sensitive case outside your circle', async () => {
+    // case-0012 exists in the fixture db, but the handlers hide it from Dana —
+    // byte-identical to a case that was never there.
+    renderDetail('case-0012')
+
+    expect(await screen.findByText(/This case doesn.t exist/)).toBeInTheDocument()
+    expect(screen.queryByText(/finance director transition/)).not.toBeInTheDocument()
+  })
 })

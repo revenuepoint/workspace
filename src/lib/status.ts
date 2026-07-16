@@ -91,6 +91,13 @@ export function statusChipClassesFor(rawStatus: string): string {
   return CHIP_CLASSES[statusKeyFor(rawStatus)]
 }
 
+/**
+ * The "Sensitive" visibility chip — NOT a status (it rides alongside the
+ * status chip). Solid ink: distinct from every status treatment above, and
+ * deliberately outside the amber (your-move) and navy (progress) families.
+ */
+export const SENSITIVE_CHIP_CLASSES = 'border-ink bg-ink text-snow'
+
 // ---------------------------------------------------------------------------
 // Case path — the ordered stages a case moves through, for the detail stepper.
 // Support cases skip the dev pipeline; problem/change run the full length.

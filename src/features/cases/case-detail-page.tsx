@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarClock, CircleCheck, ExternalLink, TriangleAlert } from 'lucide-react'
+import { CalendarClock, CircleCheck, ExternalLink, EyeOff, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
 import type { CaseDetail, CaseParticipant } from '@/lib/api-types'
@@ -10,6 +10,7 @@ import { priorityLabelFor } from '@/lib/priority'
 import { renderMarkdown } from '@/lib/sanitize'
 import { useSessionStore } from '@/stores/session'
 import { Button } from '@/components/ui/button'
+import { SensitiveChip } from '@/components/ui/sensitive-chip'
 import { Spinner } from '@/components/ui/spinner'
 import { StatusChip } from '@/components/ui/status-chip'
 import { CasePath } from './case-path'
@@ -69,6 +70,7 @@ export function CaseDetailPage() {
 }
 
 function CaseDetailView({ detail }: { detail: CaseDetail }) {
+  const accountName = useSessionStore((s) => s.contact?.accountName)
   return (
     <article>
       {/* Breadcrumb */}
@@ -94,6 +96,7 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
       {/* Meta row */}
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-[0.8125rem] text-mute">
         <StatusChip status={detail.status} />
+        {detail.sensitive ? <SensitiveChip /> : null}
         <MetaDot />
         <span className="text-inkMid">{detail.recordTypeLabel}</span>
         <MetaDot />
@@ -150,6 +153,22 @@ function CaseDetailView({ detail }: { detail: CaseDetail }) {
             <p className="mt-0.5 text-sm leading-relaxed text-inkMid">
               RevenuePoint needs something from you before this can move. Check the latest note below
               and reply when you&rsquo;re ready.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {detail.sensitive ? (
+        <div
+          role="note"
+          className="mt-6 flex items-start gap-3 rounded-lg border border-navy/30 bg-navyTint/50 px-4 py-3.5"
+        >
+          <EyeOff aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-navy" />
+          <div>
+            <p className="text-sm font-semibold text-ink">Sensitive case</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-inkMid">
+              Only you, the participants on this case, and RevenuePoint can see it. It&rsquo;s
+              hidden from everyone else at {accountName ?? 'your account'}.
             </p>
           </div>
         </div>

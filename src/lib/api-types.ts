@@ -66,6 +66,11 @@ export interface CaseSummary {
   submittedBy: { name: string } | null
   /** True when the signed-in contact is the case's primary contact ("mine"). */
   mine?: boolean
+  /**
+   * Sensitive case — visible only to the case contact and participants. Cases
+   * you're not on never appear at all, so true here always means "yours".
+   */
+  sensitive?: boolean
 }
 
 /** GET /v1/client/cases?status=open|closed|all — 200. */

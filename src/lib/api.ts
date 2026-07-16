@@ -156,6 +156,8 @@ export interface CreateCaseInput {
   businessJustification?: string
   /** Extra participant contact ids to CC on the case. */
   participants?: string[]
+  /** Mark the case sensitive — only the submitter + participants can see it. */
+  sensitive?: boolean
   files: File[]
 }
 
@@ -256,6 +258,8 @@ export const api = {
         businessJustification: input.businessJustification,
         // Multipart collapses repeated keys, so participant ids ride one JSON field.
         participants: input.participants?.length ? JSON.stringify(input.participants) : undefined,
+        // Multipart fields are strings; sent only when the box is ticked.
+        sensitive: input.sensitive ? 'true' : undefined,
       },
       input.files,
     )
