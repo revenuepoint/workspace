@@ -24,7 +24,7 @@ export function FileChip({ caseId, file }: { caseId: string; file: FileMeta }) {
     }
     setDownloading(true)
     try {
-      await saveCaseFile(caseId, file.contentDocumentId, file.title)
+      await saveCaseFile(caseId, file.contentDocumentId, file)
     } catch {
       toast.error(`${file.title} didn’t download. Give it another try.`)
     } finally {

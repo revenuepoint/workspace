@@ -37,7 +37,7 @@ export function FilePreview({
 
   async function download() {
     try {
-      await saveCaseFile(caseId, file.contentDocumentId, file.title)
+      await saveCaseFile(caseId, file.contentDocumentId, file)
     } catch {
       toast.error(`${file.title} didn’t download. Give it another try.`)
     }

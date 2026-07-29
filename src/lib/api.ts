@@ -339,13 +339,30 @@ export const api = {
   },
 }
 
+/**
+ * Compose the saved filename from title + the file's known extension.
+ * Titles are stored extension-stripped, so a bare title leaves the saved
+ * name's extension to browser MIME sniffing — which stops working the moment
+ * a title contains a dot (e.g. "v2.1"). Same composition rule as the API's
+ * Content-Disposition filename.
+ */
+export function downloadFilename(file: { title: string; extension: string }): string {
+  const extension = file.extension.trim().toLowerCase()
+  if (!extension || file.title.toLowerCase().endsWith(`.${extension}`)) return file.title
+  return `${file.title}.${extension}`
+}
+
 /** Fetch a case file and hand it to the browser as a download. */
-export async function saveCaseFile(caseId: string, contentDocumentId: string, title: string): Promise<void> {
+export async function saveCaseFile(
+  caseId: string,
+  contentDocumentId: string,
+  file: { title: string; extension: string },
+): Promise<void> {
   const blob = await api.downloadCaseFile(caseId, contentDocumentId)
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = title
+  anchor.download = downloadFilename(file)
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()

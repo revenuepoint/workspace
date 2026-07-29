@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { delay, http, HttpResponse } from 'msw'
 import { server } from '@/mocks/node'
-import { api, ApiError, buildMultipart } from '@/lib/api'
+import { api, ApiError, buildMultipart, downloadFilename } from '@/lib/api'
 import { SESSION_STORAGE_KEY, useSessionStore } from '@/stores/session'
 import { seedContact, MOCK_SESSION_JWT } from '@/mocks/fixtures'
 
@@ -199,5 +199,27 @@ describe('api client', () => {
     expect(detail.subject).toBe('Webhook retries fail')
     expect(detail.statusLabel).toBe('Received')
     expect(detail.files).toHaveLength(1)
+  })
+})
+
+describe('downloadFilename', () => {
+  it('appends the extension when the title contains a dot (regression: "v2.1" titles)', () => {
+    expect(downloadFilename({ title: '13-Week Cash Forecast v2.1 (2026-07-29)', extension: 'xlsx' })).toBe(
+      '13-Week Cash Forecast v2.1 (2026-07-29).xlsx',
+    )
+  })
+
+  it('appends the extension to dot-free titles', () => {
+    expect(downloadFilename({ title: 'Quarterly Report', extension: 'pdf' })).toBe('Quarterly Report.pdf')
+  })
+
+  it('leaves the title alone when it already ends with the extension', () => {
+    expect(downloadFilename({ title: 'export.csv', extension: 'csv' })).toBe('export.csv')
+    expect(downloadFilename({ title: 'EXPORT.CSV', extension: 'csv' })).toBe('EXPORT.CSV')
+  })
+
+  it('returns the bare title when the file has no extension', () => {
+    expect(downloadFilename({ title: 'README', extension: '' })).toBe('README')
+    expect(downloadFilename({ title: 'notes v1.2', extension: '  ' })).toBe('notes v1.2')
   })
 })
