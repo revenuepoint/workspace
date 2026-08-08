@@ -7,8 +7,12 @@ let rumInitialized = false
 /**
  * Datadog RUM — only initializes when both VITE_DD_APP_ID and
  * VITE_DD_CLIENT_TOKEN are set (they're empty in dev and mock builds).
- * CSP note: connect-src allows *.datadoghq.com AND the SDK's default US1
- * intake, browser-intake-datadoghq.com (index.html + the api app's header).
+ * CSP note: connect-src allows *.datadoghq.com, the SDK's default US1 intake
+ * (browser-intake-datadoghq.com) AND browser-intake-us5-datadoghq.com, which is
+ * where this org actually sends. The us5 host is hyphenated, so *.datadoghq.com
+ * does NOT cover it — without it RUM reports as initialized while every beacon
+ * is CSP-blocked. Both index.html and the api app's header must list it; the
+ * enforced policy is the intersection of the two.
  */
 export function initObservability(): boolean {
   if (rumInitialized) return true

@@ -9,10 +9,16 @@
       style-src 'unsafe-inline' is required: Radix + sonner inject runtime
       <style> tags and Tailwind preflight is inlined during preview of CSS
       transitions.
+      connect-src carries BOTH datadog intakes: browser-intake-datadoghq.com is
+      the SDK's US1 default, and browser-intake-us5-datadoghq.com is where this
+      org (us5) actually sends. The us5 host is hyphenated, so *.datadoghq.com
+      does not cover it — omit it and RUM initializes but every beacon is
+      silently CSP-blocked. Must stay in sync with SPA_CSP in the api app's
+      server.ts; the intersection is what is enforced.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; connect-src 'self' https://api.revenuepoint.com https://*.datadoghq.com https://browser-intake-datadoghq.com; script-src 'self'; img-src 'self' data: blob:; font-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-src 'self' blob:; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; connect-src 'self' https://api.revenuepoint.com https://*.datadoghq.com https://browser-intake-datadoghq.com https://browser-intake-us5-datadoghq.com; script-src 'self'; img-src 'self' data: blob:; font-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-src 'self' blob:; base-uri 'self'; form-action 'self'"
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
